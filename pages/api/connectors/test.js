@@ -98,6 +98,53 @@ async function testGraph() {
   return steps;
 }
 
+async function testOutlook() {
+  const steps = [];
+  const tenant = await getConfigValue('MS_TENANT_ID');
+  const clientId = await getConfigValue('MS_CLIENT_ID');
+  const secret = await getConfigValue('MS_CLIENT_SECRET');
+  const mailbox = await getConfigValue('OUTLOOK_MAILBOX');
+  const folder = (await getConfigValue('OUTLOOK_FOLDER')) || 'Inbox';
+
+  steps.push({
+    step: 'Variables présentes',
+    ok: !!(tenant && clientId && secret && mailbox),
+    detail: { tenantId: tenant ? tenant.slice(0, 8) + '…' : 'manquant', clientId: clientId ? clientId.slice(0, 8) + '…' : 'manquant', secret: secret ? `(${secret.length} chars)` : 'manquant', mailbox: mailbox || 'manquant', folder },
+  });
+  if (!tenant || !clientId || !secret || !mailbox) return steps;
+
+  let token;
+  try {
+    const body = new URLSearchParams({ client_id: clientId, client_secret: secret, scope: 'https://graph.microsoft.com/.default', grant_type: 'client_credentials' });
+    const r = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString() });
+    if (!r.ok) {
+      const txt = await r.text();
+      steps.push({ step: 'Token Azure AD', ok: false, error: `HTTP ${r.status} — ${txt.slice(0, 240)}` });
+      return steps;
+    }
+    const j = await r.json();
+    token = j.access_token;
+    const claims = JSON.parse(Buffer.from(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));
+    steps.push({ step: 'Token Azure AD', ok: true, detail: { aud: claims.aud, tid: claims.tid, appid: claims.appid, roles: claims.roles } });
+    const hasMail = claims.roles?.some(r => r.startsWith('Mail.'));
+    steps.push({ step: 'Permission Mail.* dans le token', ok: !!hasMail, error: hasMail ? null : 'Aucun rôle Mail.* trouvé. Ajouter "Mail.Read" en Application permission + admin consent.' });
+    if (!hasMail) return steps;
+  } catch (e) {
+    steps.push({ step: 'Token Azure AD', ok: false, error: e.message });
+    return steps;
+  }
+
+  try {
+    const folderEnc = encodeURIComponent(folder);
+    const u = `${GRAPH_BASE}/users/${encodeURIComponent(mailbox)}/mailFolders/${folderEnc}/messages?$top=3&$select=subject,from,receivedDateTime`;
+    const j = await graphGet(u, token);
+    steps.push({ step: `Accès dossier "${folder}"`, ok: true, detail: { count: j.value?.length || 0, derniers: j.value?.map(m => ({ from: m.from?.emailAddress?.address, subject: m.subject?.slice(0, 60), date: m.receivedDateTime })) } });
+  } catch (e) {
+    steps.push({ step: `Accès dossier "${folder}"`, ok: false, error: e.message });
+  }
+  return steps;
+}
+
 async function testOdoo() {
   const steps = [];
   const url = await getConfigValue('ODOO_URL');
@@ -136,8 +183,9 @@ export default async function handler(req, res) {
   const id = req.body?.id;
   let steps;
   if (id === 'graph') steps = await testGraph();
+  else if (id === 'outlook') steps = await testOutlook();
   else if (id === 'odoo') steps = await testOdoo();
-  else return res.status(400).json({ ok: false, error: 'id attendu : "graph" ou "odoo"' });
+  else return res.status(400).json({ ok: false, error: 'id attendu : "graph", "outlook" ou "odoo"' });
 
   return res.status(200).json({ ok: steps.every(s => s.ok), id, steps });
 }
