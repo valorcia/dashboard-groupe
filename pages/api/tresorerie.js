@@ -102,12 +102,96 @@ export default async function handler(req, res) {
   const file = process.env.ONEDRIVE_FILE_PATH;
   const sheet = process.env.TRESORERIE_SHEET || 'Prévisionnel TRESO';
   const range = process.env.TRESORERIE_RANGE || 'H4:AS97';
+  const isDiag = req.query.diag === '1';
 
-  if (!file) {
+  if (!file && !isDiag) {
     return res.status(501).json({
       ok: false,
       error: 'ONEDRIVE_FILE_PATH manquant',
     });
+  }
+
+  // Mode diagnostic : test progressif de chaque étape de l'auth Graph.
+  if (isDiag) {
+    const steps = [];
+    const tenant = process.env.MS_TENANT_ID;
+    const clientId = process.env.MS_CLIENT_ID;
+    const secret = process.env.MS_CLIENT_SECRET;
+
+    steps.push({
+      step: '1. Variables d\'env',
+      ok: !!(tenant && clientId && secret),
+      detail: {
+        MS_TENANT_ID: tenant ? `${tenant.slice(0, 8)}…${tenant.slice(-4)}` : 'MANQUANT',
+        MS_CLIENT_ID: clientId ? `${clientId.slice(0, 8)}…${clientId.slice(-4)}` : 'MANQUANT',
+        MS_CLIENT_SECRET: secret ? `(${secret.length} chars)` : 'MANQUANT',
+        SHAREPOINT_HOSTNAME: process.env.SHAREPOINT_HOSTNAME || '(non défini)',
+        SHAREPOINT_SITE_PATH: process.env.SHAREPOINT_SITE_PATH || '(non défini)',
+        ONEDRIVE_USER: process.env.ONEDRIVE_USER || '(non défini)',
+        ONEDRIVE_FILE_PATH: file || '(non défini)',
+      },
+    });
+
+    let token = null;
+    try {
+      token = await getAccessToken();
+      const parts = token.split('.');
+      let claims = null;
+      if (parts.length === 3) {
+        try {
+          const payload = Buffer.from(parts[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
+          claims = JSON.parse(payload);
+        } catch {}
+      }
+      steps.push({
+        step: '2. Token Graph (client_credentials)',
+        ok: true,
+        detail: {
+          aud: claims?.aud,
+          tid: claims?.tid,
+          appid: claims?.appid,
+          roles: claims?.roles,
+          exp: claims?.exp ? new Date(claims.exp * 1000).toISOString() : null,
+        },
+      });
+    } catch (e) {
+      steps.push({ step: '2. Token Graph', ok: false, error: e.message });
+      return res.status(200).json({ ok: false, mode: 'diagnostic', steps });
+    }
+
+    try {
+      const org = await graphGet(`${GRAPH_BASE}/organization`, token);
+      steps.push({
+        step: '3. /organization (vérifie tenant)',
+        ok: true,
+        detail: {
+          tenant: org.value?.[0]?.displayName,
+          tenantId: org.value?.[0]?.id,
+          verifiedDomains: org.value?.[0]?.verifiedDomains?.map(d => d.name),
+        },
+      });
+    } catch (e) {
+      steps.push({ step: '3. /organization', ok: false, error: e.message });
+    }
+
+    if (process.env.SHAREPOINT_HOSTNAME && process.env.SHAREPOINT_SITE_PATH) {
+      const sitePath = process.env.SHAREPOINT_SITE_PATH.startsWith('/') ? process.env.SHAREPOINT_SITE_PATH : `/${process.env.SHAREPOINT_SITE_PATH}`;
+      try {
+        const site = await graphGet(`${GRAPH_BASE}/sites/${encodeURIComponent(process.env.SHAREPOINT_HOSTNAME)}:${sitePath}`, token);
+        steps.push({ step: '4. Résolution site SharePoint', ok: true, detail: { id: site.id, name: site.displayName, webUrl: site.webUrl } });
+      } catch (e) {
+        steps.push({ step: '4. Résolution site SharePoint', ok: false, error: e.message });
+      }
+    } else if (process.env.ONEDRIVE_USER) {
+      try {
+        const user = await graphGet(`${GRAPH_BASE}/users/${encodeURIComponent(process.env.ONEDRIVE_USER)}`, token);
+        steps.push({ step: '4. Résolution utilisateur', ok: true, detail: { id: user.id, upn: user.userPrincipalName, mail: user.mail } });
+      } catch (e) {
+        steps.push({ step: '4. Résolution utilisateur', ok: false, error: e.message });
+      }
+    }
+
+    return res.status(200).json({ ok: steps.every(s => s.ok), mode: 'diagnostic', steps });
   }
 
   try {
