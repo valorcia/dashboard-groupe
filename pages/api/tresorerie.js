@@ -1,15 +1,19 @@
-// Endpoint trésorerie hebdomadaire — lecture d'un Excel sur OneDrive via Microsoft Graph.
+// Endpoint trésorerie hebdomadaire — lecture du fichier "Prévisionnel TRESO"
+// hébergé sur OneDrive, via Microsoft Graph (flow client_credentials).
 //
-// Configuration requise (variables d'env Vercel) :
-//   MS_TENANT_ID        — Tenant Azure AD
-//   MS_CLIENT_ID        — App registration client ID
-//   MS_CLIENT_SECRET    — App registration secret
-//   ONEDRIVE_USER       — UPN du propriétaire OneDrive (ex: loic@valorcia.com)
-//   ONEDRIVE_FILE_PATH  — Chemin du fichier (ex: /Finance/Tresorerie_Groupe_2026.xlsx)
-//   TRESORERIE_SHEET    — Nom de la feuille (défaut: "Données")
+// Structure attendue du fichier (sheet "Prévisionnel TRESO") :
+//   - Ligne 4  : numéros de semaines (S43, S44, … , S28) en H:AS
+//   - Ligne 36 : total sorties hebdo (H:AS)
+//   - Ligne 91 : total entrées TTC hebdo (H:AS)
+//   - Ligne 95 : différence hebdo (entrées − sorties)
+//   - Ligne 97 : trésorerie cumulée fin de semaine
 //
-// Tant que ces variables ne sont pas définies, on renvoie 501 et le dashboard
-// affiche les données simulées (fallback côté UI).
+// Variables d'env requises côté Vercel :
+//   MS_TENANT_ID, MS_CLIENT_ID, MS_CLIENT_SECRET
+//   ONEDRIVE_USER       — ex: loic@valorcia.com
+//   ONEDRIVE_FILE_PATH  — ex: /Finance/Previsionnel_Tresorerie_TDB.xlsx
+//   TRESORERIE_SHEET    — défaut: "Prévisionnel TRESO"
+//   TRESORERIE_RANGE    — défaut: "H4:AS97" (couvre toutes les lignes utiles)
 
 const GRAPH_BASE = 'https://graph.microsoft.com/v1.0';
 
@@ -37,40 +41,28 @@ async function getAccessToken() {
 }
 
 async function readExcelRange(token, user, filePath, sheet, range) {
-  const encoded = encodeURIComponent(filePath.startsWith('/') ? filePath : `/${filePath}`);
-  const url = `${GRAPH_BASE}/users/${encodeURIComponent(user)}/drive/root:${encoded}:/workbook/worksheets('${encodeURIComponent(sheet)}')/range(address='${encodeURIComponent(range)}')`;
+  const path = filePath.startsWith('/') ? filePath : `/${filePath}`;
+  const encodedPath = path.split('/').map(encodeURIComponent).join('/');
+  const url = `${GRAPH_BASE}/users/${encodeURIComponent(user)}/drive/root:${encodedPath}:/workbook/worksheets('${encodeURIComponent(sheet)}')/range(address='${encodeURIComponent(range)}')`;
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) {
     const txt = await res.text();
-    throw new Error(`Lecture Excel échouée : HTTP ${res.status} — ${txt.slice(0, 200)}`);
+    throw new Error(`Lecture Excel échouée : HTTP ${res.status} — ${txt.slice(0, 300)}`);
   }
   return res.json();
 }
 
-// Parse les valeurs Excel en lignes [semaine, label, entrees, sorties].
-// Attendu : colonne A=semaine (ex "S20"), B=label (ex "12-18 mai"), C=entrées, D=sorties.
-function parseRows(values) {
-  const out = [];
-  for (const row of values || []) {
-    if (!row || !row[0]) continue;
-    const entrees = parseFloat(String(row[2] ?? '').replace(/\s/g, '').replace(',', '.'));
-    const sorties = parseFloat(String(row[3] ?? '').replace(/\s/g, '').replace(',', '.'));
-    if (!isFinite(entrees) && !isFinite(sorties)) continue;
-    out.push({
-      semaine: String(row[0]),
-      label: row[1] ? String(row[1]) : '',
-      entrees: isFinite(entrees) ? entrees : 0,
-      sorties: isFinite(sorties) ? sorties : 0,
-    });
-  }
-  return out;
+function toNum(v) {
+  if (v === null || v === undefined || v === '') return 0;
+  const n = parseFloat(String(v).replace(/\s/g, '').replace(',', '.'));
+  return isFinite(n) ? n : 0;
 }
 
 export default async function handler(req, res) {
   const user = process.env.ONEDRIVE_USER;
   const file = process.env.ONEDRIVE_FILE_PATH;
-  const sheet = process.env.TRESORERIE_SHEET || 'Données';
-  const range = req.query.range || process.env.TRESORERIE_RANGE || 'A2:D14';
+  const sheet = process.env.TRESORERIE_SHEET || 'Prévisionnel TRESO';
+  const range = process.env.TRESORERIE_RANGE || 'H4:AS97';
 
   if (!user || !file) {
     return res.status(501).json({
@@ -82,7 +74,31 @@ export default async function handler(req, res) {
   try {
     const token = await getAccessToken();
     const data = await readExcelRange(token, user, file, sheet, range);
-    const semaines = parseRows(data.values);
+    const values = data.values || [];
+
+    // values[0] = ligne 4 du sheet (semaines)
+    // values[32] = ligne 36 (sorties), values[87] = ligne 91 (entrées),
+    // values[91] = ligne 95 (différence), values[93] = ligne 97 (cumul)
+    const rowSemaines = values[0] || [];
+    const rowSorties = values[32] || [];
+    const rowEntrees = values[87] || [];
+    const rowDiff = values[91] || [];
+    const rowCumul = values[93] || [];
+
+    const semaines = [];
+    for (let i = 0; i < rowSemaines.length; i++) {
+      const sem = rowSemaines[i];
+      if (!sem) continue;
+      semaines.push({
+        semaine: String(sem),
+        label: '',
+        entrees: toNum(rowEntrees[i]),
+        sorties: toNum(rowSorties[i]),
+        difference: toNum(rowDiff[i]),
+        cumul: toNum(rowCumul[i]),
+      });
+    }
+
     return res.status(200).json({
       ok: true,
       source_fichier: file.split('/').pop(),

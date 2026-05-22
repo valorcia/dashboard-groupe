@@ -97,22 +97,22 @@ const data = {
     { nom: "CoachMe", icone: "🧠", avatarSeed: "coachme-bot-33", statut: "En dev", env: "—", avancement: 15, desc: "Coaching IA équipes terrain", couleur: "#b5600c", sources: ["Mobile équipes"] },
   ],
   tresorerieHebdo: {
-    source_fichier: "Tresorerie_Groupe_2026.xlsx",
+    source_fichier: "Previsionnel_Tresorerie_TDB.xlsx",
     onedrive_path: "OneDrive/Finance/",
     derniere_maj: "2026-05-22 06:30",
     semaines: [
-      { semaine: "S10", label: "3-9 mar", entrees: 28400, sorties: 22100 },
-      { semaine: "S11", label: "10-16 mar", entrees: 31200, sorties: 24800 },
-      { semaine: "S12", label: "17-23 mar", entrees: 26800, sorties: 29400 },
-      { semaine: "S13", label: "24-30 mar", entrees: 42100, sorties: 27600 },
-      { semaine: "S14", label: "31-6 avr", entrees: 38500, sorties: 31200 },
-      { semaine: "S15", label: "7-13 avr", entrees: 51200, sorties: 28900 },
-      { semaine: "S16", label: "14-20 avr", entrees: 44800, sorties: 35100 },
-      { semaine: "S17", label: "21-27 avr", entrees: 48600, sorties: 41200 },
-      { semaine: "S18", label: "28-4 mai", entrees: 56100, sorties: 33400 },
-      { semaine: "S19", label: "5-11 mai", entrees: 49200, sorties: 38800 },
-      { semaine: "S20", label: "12-18 mai", entrees: 53400, sorties: 42100 },
-      { semaine: "S21", label: "19-22 mai", entrees: 31200, sorties: 27800 },
+      { semaine: "S10", entrees: 5000, sorties: 13750, difference: -8750, cumul: 41235 },
+      { semaine: "S11", entrees: 0, sorties: 39880, difference: -39880, cumul: 1355 },
+      { semaine: "S12", entrees: 39800, sorties: 0, difference: 39800, cumul: 41155 },
+      { semaine: "S13", entrees: 7000, sorties: 16000, difference: -9000, cumul: 32155 },
+      { semaine: "S14", entrees: 0, sorties: 0, difference: 0, cumul: 32155 },
+      { semaine: "S15", entrees: 16100, sorties: 13000, difference: 3100, cumul: 35255 },
+      { semaine: "S16", entrees: 9700, sorties: 0, difference: 9700, cumul: 44955 },
+      { semaine: "S17", entrees: 57644, sorties: 49600, difference: 8044, cumul: 52999 },
+      { semaine: "S18", entrees: 27000, sorties: 20000, difference: 7000, cumul: 59999 },
+      { semaine: "S19", entrees: 0, sorties: 0, difference: 0, cumul: 59999 },
+      { semaine: "S20", entrees: 0, sorties: 0, difference: 0, cumul: 59999 },
+      { semaine: "S21", entrees: 38800, sorties: 27000, difference: 11800, cumul: 71799 },
     ],
   },
   commercialAgent: {
@@ -522,70 +522,129 @@ export default function Dashboard() {
                       </div>
                     </div>
 
-                    {/* KPIs entrées / sorties / solde */}
+                    {/* KPIs entrées / sorties / solde / trésorerie actuelle */}
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, marginBottom: 18 }}>
                       <div style={{ background: "#ecfdf5", border: "1px solid #bbf7d0", borderRadius: 10, padding: "10px 14px" }}>
-                        <div style={{ fontSize: 10, color: "#065f46", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.6 }}>↑ Entrées 12s</div>
+                        <div style={{ fontSize: 10, color: "#065f46", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.6 }}>↑ Entrées ({semaines.length}s)</div>
                         <div style={{ fontSize: 18, fontWeight: 700, color: "#059669" }}>{(totalEntrees / 1000).toFixed(1)}k€</div>
                       </div>
                       <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10, padding: "10px 14px" }}>
-                        <div style={{ fontSize: 10, color: "#991b1b", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.6 }}>↓ Sorties 12s</div>
+                        <div style={{ fontSize: 10, color: "#991b1b", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.6 }}>↓ Sorties ({semaines.length}s)</div>
                         <div style={{ fontSize: 18, fontWeight: 700, color: "#dc2626" }}>{(totalSorties / 1000).toFixed(1)}k€</div>
                       </div>
                       <div style={{ background: soldeNet >= 0 ? "#eff6ff" : "#fef2f2", border: "1px solid " + (soldeNet >= 0 ? "#bfdbfe" : "#fecaca"), borderRadius: 10, padding: "10px 14px" }}>
-                        <div style={{ fontSize: 10, color: soldeNet >= 0 ? "#1e40af" : "#991b1b", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.6 }}>= Solde net</div>
+                        <div style={{ fontSize: 10, color: soldeNet >= 0 ? "#1e40af" : "#991b1b", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.6 }}>= Solde net cumulé</div>
                         <div style={{ fontSize: 18, fontWeight: 700, color: soldeNet >= 0 ? "#2563eb" : "#dc2626" }}>{soldeNet >= 0 ? "+" : ""}{(soldeNet / 1000).toFixed(1)}k€</div>
                       </div>
+                      {(() => {
+                        const dernierCumul = [...semaines].reverse().find(w => w.cumul !== undefined && w.cumul !== 0);
+                        if (!dernierCumul) return null;
+                        return (
+                          <div style={{ background: "#fdf4ff", border: "1px solid #f5d0fe", borderRadius: 10, padding: "10px 14px" }}>
+                            <div style={{ fontSize: 10, color: "#86198f", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.6 }}>🏦 Trésorerie fin {dernierCumul.semaine}</div>
+                            <div style={{ fontSize: 18, fontWeight: 700, color: "#a21caf" }}>{(dernierCumul.cumul / 1000).toFixed(1)}k€</div>
+                          </div>
+                        );
+                      })()}
                     </div>
 
-                    {/* Graphique miroir entrées (haut) / sorties (bas) */}
-                    <div style={{ position: "relative", padding: "0 0 4px" }}>
-                      <div style={{ display: "flex", alignItems: "stretch", gap: 6, height: 200 }}>
-                        {semaines.map((w, i) => {
-                          const solde = w.entrees - w.sorties;
-                          return (
-                            <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", minWidth: 0 }}>
-                              {/* Partie haute : entrées */}
-                              <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end", width: "100%", padding: "0 1px" }}>
-                                <div title={`Entrées ${w.label} : ${w.entrees.toLocaleString("fr-FR")} €`}
-                                  style={{
-                                    height: `${(w.entrees / maxVal) * 100}%`,
-                                    background: "linear-gradient(180deg, #10b981 0%, #059669 100%)",
-                                    borderRadius: "4px 4px 0 0",
-                                    minHeight: 3,
-                                    cursor: "help",
-                                  }} />
-                              </div>
-                              {/* Axe central */}
-                              <div style={{ height: 1, background: "#cbd5e1", width: "100%" }} />
-                              {/* Partie basse : sorties */}
-                              <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-start", width: "100%", padding: "0 1px" }}>
-                                <div title={`Sorties ${w.label} : ${w.sorties.toLocaleString("fr-FR")} €`}
-                                  style={{
-                                    height: `${(w.sorties / maxVal) * 100}%`,
-                                    background: "linear-gradient(180deg, #ef4444 0%, #dc2626 100%)",
-                                    borderRadius: "0 0 4px 4px",
-                                    minHeight: 3,
-                                    cursor: "help",
-                                  }} />
-                              </div>
-                              {/* Label semaine + solde */}
-                              <div style={{ fontSize: 10, color: "#64748b", marginTop: 4, fontWeight: 600 }}>{w.semaine}</div>
-                              <div style={{ fontSize: 9, color: solde >= 0 ? "#059669" : "#dc2626", fontWeight: 700 }}>
-                                {solde >= 0 ? "+" : ""}{(solde / 1000).toFixed(0)}k
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
+                    {/* Graphique miroir + ligne de trésorerie cumulée superposée */}
+                    {(() => {
+                      const W = 1100, H = 240, padL = 8, padR = 8, padT = 10, padB = 32;
+                      const innerW = W - padL - padR;
+                      const innerH = H - padT - padB;
+                      const midY = padT + innerH / 2;
+                      const colW = innerW / semaines.length;
+                      const cumuls = semaines.map(w => w.cumul || 0).filter(v => v !== 0);
+                      const hasCumul = cumuls.length > 0;
+                      const cumulMin = hasCumul ? Math.min(...cumuls, 0) : 0;
+                      const cumulMax = hasCumul ? Math.max(...cumuls, 0) : 1;
+                      const cumulRange = cumulMax - cumulMin || 1;
+                      const cumulY = (v) => padT + innerH - ((v - cumulMin) / cumulRange) * innerH;
 
-                    <div style={{ display: "flex", justifyContent: "center", gap: 18, marginTop: 12, fontSize: 11, color: "#64748b" }}>
+                      const linePoints = semaines.map((w, i) => {
+                        const x = padL + colW * (i + 0.5);
+                        const y = cumulY(w.cumul || 0);
+                        return `${x.toFixed(1)},${y.toFixed(1)}`;
+                      }).join(' ');
+
+                      return (
+                        <div style={{ overflowX: "auto", paddingBottom: 4 }}>
+                          <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", minWidth: semaines.length * 28, height: H, display: "block" }} preserveAspectRatio="none">
+                            {/* Axe central */}
+                            <line x1={padL} y1={midY} x2={W - padR} y2={midY} stroke="#cbd5e1" strokeWidth="1" />
+
+                            {/* Barres entrées (au-dessus) et sorties (en-dessous) */}
+                            {semaines.map((w, i) => {
+                              const x = padL + colW * i + 1;
+                              const bw = Math.max(colW - 2, 1);
+                              const hIn = (w.entrees / maxVal) * (innerH / 2);
+                              const hOut = (w.sorties / maxVal) * (innerH / 2);
+                              return (
+                                <g key={i}>
+                                  {w.entrees > 0 && (
+                                    <rect x={x} y={midY - hIn} width={bw} height={hIn} fill="url(#gIn)" rx="2">
+                                      <title>{`${w.semaine} — Entrées : ${w.entrees.toLocaleString("fr-FR")} €`}</title>
+                                    </rect>
+                                  )}
+                                  {w.sorties > 0 && (
+                                    <rect x={x} y={midY} width={bw} height={hOut} fill="url(#gOut)" rx="2">
+                                      <title>{`${w.semaine} — Sorties : ${w.sorties.toLocaleString("fr-FR")} €`}</title>
+                                    </rect>
+                                  )}
+                                </g>
+                              );
+                            })}
+
+                            {/* Ligne de trésorerie cumulée */}
+                            {hasCumul && (
+                              <>
+                                <polyline points={linePoints} fill="none" stroke="#a21caf" strokeWidth="2" />
+                                {semaines.map((w, i) => {
+                                  if (!w.cumul) return null;
+                                  const x = padL + colW * (i + 0.5);
+                                  const y = cumulY(w.cumul);
+                                  return (
+                                    <circle key={i} cx={x} cy={y} r="3" fill="#a21caf">
+                                      <title>{`${w.semaine} — Trésorerie cumulée : ${w.cumul.toLocaleString("fr-FR")} €`}</title>
+                                    </circle>
+                                  );
+                                })}
+                              </>
+                            )}
+
+                            {/* Labels semaines */}
+                            {semaines.map((w, i) => {
+                              const x = padL + colW * (i + 0.5);
+                              return (
+                                <text key={i} x={x} y={H - 8} textAnchor="middle" fontSize="10" fill="#64748b" fontWeight="600">{w.semaine}</text>
+                              );
+                            })}
+
+                            <defs>
+                              <linearGradient id="gIn" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="#10b981" />
+                                <stop offset="100%" stopColor="#059669" />
+                              </linearGradient>
+                              <linearGradient id="gOut" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="#ef4444" />
+                                <stop offset="100%" stopColor="#dc2626" />
+                              </linearGradient>
+                            </defs>
+                          </svg>
+                        </div>
+                      );
+                    })()}
+
+                    <div style={{ display: "flex", justifyContent: "center", gap: 18, marginTop: 8, fontSize: 11, color: "#64748b", flexWrap: "wrap" }}>
                       <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
                         <span style={{ width: 10, height: 10, background: "#10b981", borderRadius: 2 }} /> Entrées
                       </span>
                       <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
                         <span style={{ width: 10, height: 10, background: "#ef4444", borderRadius: 2 }} /> Sorties
+                      </span>
+                      <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                        <span style={{ width: 16, height: 2, background: "#a21caf", borderRadius: 1 }} /> Trésorerie cumulée
                       </span>
                     </div>
                   </div>
