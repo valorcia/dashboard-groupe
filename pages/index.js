@@ -89,12 +89,46 @@ const data = {
       { nom: "Contrat fournisseur Pool Tech", statut: "En révision", priorite: "Normal", type: "Contrat", prochaine_action: "Validation clauses", echeance: "30/05/2026", societe: "Valorcia 🇱🇺", risque: "Faible" },
     ],
   },
-  apps: [
-    { nom: "Planneo", statut: "Actif", env: "AWS", avancement: 80, desc: "Planning chantiers — API à développer", couleur: "#2d7a5a" },
-    { nom: "SEO-AUTO", statut: "En dev", env: "—", avancement: 35, desc: "Automatisation SEO contenu", couleur: "#2e6da4" },
-    { nom: "Smart-Deal", statut: "En dev", env: "—", avancement: 20, desc: "Optimisation devis & closing", couleur: "#6b3fa0" },
-    { nom: "CoachMe", statut: "En dev", env: "—", avancement: 15, desc: "Coaching IA équipes terrain", couleur: "#b5600c" },
+  agents: [
+    { nom: "Commercial", icone: "🎯", statut: "En dev", env: "Vercel", avancement: 40, desc: "Analyse leads, traçabilité, relances devis", couleur: "#dc2626", sources: ["Odoo CRM", "Outlook", "Jotform"], onglet: "commercial-agent" },
+    { nom: "Planneo", icone: "📅", statut: "Actif", env: "AWS", avancement: 80, desc: "Planning chantiers — API à développer", couleur: "#2d7a5a", sources: ["Planneo API"] },
+    { nom: "SEO-AUTO", icone: "📈", statut: "En dev", env: "—", avancement: 35, desc: "Automatisation SEO contenu", couleur: "#2e6da4", sources: ["GSC", "GA4"] },
+    { nom: "Smart-Deal", icone: "💼", statut: "En dev", env: "—", avancement: 20, desc: "Optimisation devis & closing", couleur: "#6b3fa0", sources: ["Odoo Vente"] },
+    { nom: "CoachMe", icone: "🧠", statut: "En dev", env: "—", avancement: 15, desc: "Coaching IA équipes terrain", couleur: "#b5600c", sources: ["Mobile équipes"] },
   ],
+  commercialAgent: {
+    connexions: [
+      { service: "Odoo CRM", statut: "connecté", icone: "🟢", desc: "Lecture pipeline & opportunités" },
+      { service: "Odoo Vente", statut: "connecté", icone: "🟢", desc: "Lecture devis & statuts" },
+      { service: "Outlook (Microsoft 365)", statut: "à connecter", icone: "🔴", desc: "Tracking emails entrants/sortants" },
+      { service: "Jotform", statut: "à connecter", icone: "🔴", desc: "Webhook nouveaux leads" },
+    ],
+    kpis: { leads_mois: 47, devis_envoyes: 28, devis_sans_reponse: 9, relances_envoyees: 23, conversions: 7, taux_conversion: 14.9 },
+    sources_leads: [
+      { source: "Jotform", count: 12, couleur: "#f97316" },
+      { source: "Outlook", count: 18, couleur: "#2e6da4" },
+      { source: "Odoo CRM", couleur: "#6b3fa0", count: 11 },
+      { source: "Site web", count: 6, couleur: "#2d7a5a" },
+    ],
+    leads_a_traiter: [
+      { nom: "Pierre Lambert", source: "Jotform", societe: "Luca 🇧🇪", jours: 1, demande: "Devis piscine coque 8x4", urgent: false },
+      { nom: "Mme Hoffmann", source: "Outlook", societe: "Valorcia 🇱🇺", jours: 2, demande: "Rénovation piscine intérieure", urgent: false },
+      { nom: "Restaurant Le Coq", source: "Odoo CRM", societe: "Luca 🇧🇪", jours: 3, demande: "Spa pro 10 places", urgent: true },
+      { nom: "Sylvie Mertens", source: "Jotform", societe: "123Spa 🇫🇷", jours: 4, demande: "Spa Vivo 6 places", urgent: false },
+      { nom: "M. Dieudonné", source: "Outlook", societe: "Valorcia 🇱🇺", jours: 6, demande: "Étude faisabilité piscine", urgent: true },
+    ],
+    devis_a_relancer: [
+      { client: "Camping du Lac", montant: 52000, jours: 18, societe: "Luca 🇧🇪", action: "Appel + email programmé pour demain 10h" },
+      { client: "Domaine Duhr", montant: 41000, jours: 22, societe: "Valorcia 🇱🇺", action: "2e relance email — modèle 'objection prix'" },
+      { client: "Mme Lecomte", montant: 18200, jours: 14, societe: "Luca 🇧🇪", action: "Relance SMS suggérée" },
+    ],
+    actions_agent: [
+      { date: "Aujourd'hui 09:14", type: "Email envoyé", desc: "Relance Camping du Lac — modèle 'reminder J+15'" },
+      { date: "Aujourd'hui 08:30", type: "Lead créé Odoo", desc: "Pierre Lambert (Jotform → Odoo CRM Luca)" },
+      { date: "Hier 17:42", type: "Devis tracké", desc: "Domaine Duhr — devis 22 jours sans réponse, escaladé" },
+      { date: "Hier 14:15", type: "Note CRM", desc: "M. Verhagen → ajout note 'attente retour permis'" },
+    ],
+  },
 };
 
 const MOIS = ["Jan", "Fév", "Mar", "Avr", "Mai", "Jun"];
@@ -164,7 +198,8 @@ export default function Dashboard() {
     { id: "ecommerce", label: "123Spa e-commerce" },
     { id: "marketing", label: "Marketing" },
     { id: "juridique", label: "Juridique" },
-    { id: "apps", label: "Apps" },
+    { id: "commercial-agent", label: "🎯 Agent Commercial" },
+    { id: "agents", label: "Agents" },
   ];
 
   const navStyle = (id) => ({
@@ -531,26 +566,182 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* ─── APPS ─── */}
-          {tab === "apps" && (
+          {/* ─── AGENT COMMERCIAL ─── */}
+          {tab === "commercial-agent" && (() => {
+            const ag = data.commercialAgent;
+            const totalSources = ag.sources_leads.reduce((a, s) => a + s.count, 0);
+            return (
+              <div>
+                {/* Bandeau agent */}
+                <div style={{ background: "linear-gradient(135deg, #dc2626 0%, #9f1239 100%)", borderRadius: 16, padding: "20px 24px", color: "#fff", marginBottom: 20, display: "flex", alignItems: "center", gap: 18 }}>
+                  <div style={{ fontSize: 42, lineHeight: 1 }}>🎯</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 18, fontWeight: 700 }}>Agent Commercial</div>
+                    <div style={{ fontSize: 13, opacity: 0.9, marginTop: 2 }}>Analyse leads, traçabilité, relances devis — multi-sociétés</div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <Badge label="En dev — 40%" type="dev" />
+                    <div style={{ fontSize: 11, opacity: 0.85, marginTop: 6 }}>Vercel · Node 20</div>
+                  </div>
+                </div>
+
+                {/* Connexions */}
+                <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: 14, padding: "16px 20px", marginBottom: 16 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12 }}>Connexions API</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
+                    {ag.connexions.map((c, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: c.statut === "connecté" ? "#f0fdf4" : "#fef2f2", border: "1px solid " + (c.statut === "connecté" ? "#bbf7d0" : "#fecaca"), borderRadius: 10 }}>
+                        <div style={{ fontSize: 14 }}>{c.icone}</div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600 }}>{c.service}</div>
+                          <div style={{ fontSize: 11, color: "#64748b" }}>{c.desc}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* KPIs */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12, marginBottom: 20 }}>
+                  <KpiCard label="Leads ce mois" value={ag.kpis.leads_mois} sub="toutes sources" color="#dc2626" />
+                  <KpiCard label="Devis envoyés" value={ag.kpis.devis_envoyes} sub="ce mois" color="#1e293b" />
+                  <KpiCard label="Sans réponse" value={ag.kpis.devis_sans_reponse} sub="à relancer" alert={true} />
+                  <KpiCard label="Relances auto" value={ag.kpis.relances_envoyees} sub="par l'agent" color="#2d7a5a" />
+                  <KpiCard label="Conversions" value={ag.kpis.conversions} sub={`${ag.kpis.taux_conversion}% taux`} color="#2d7a5a" />
+                </div>
+
+                {/* Sources de leads */}
+                <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: 14, padding: "18px 20px", marginBottom: 16 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 14 }}>Provenance des leads — ce mois</div>
+                  <div style={{ display: "flex", height: 28, borderRadius: 8, overflow: "hidden", marginBottom: 10 }}>
+                    {ag.sources_leads.map((s, i) => (
+                      <div key={i} style={{ flex: s.count, background: s.couleur, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 12, fontWeight: 600 }}>
+                        {s.count}
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 14 }}>
+                    {ag.sources_leads.map((s, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+                        <div style={{ width: 10, height: 10, background: s.couleur, borderRadius: 2 }} />
+                        <span style={{ fontWeight: 500 }}>{s.source}</span>
+                        <span style={{ color: "#94a3b8" }}>{s.count} ({Math.round((s.count / totalSources) * 100)}%)</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Leads à traiter */}
+                <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: 14, overflow: "hidden", marginBottom: 16 }}>
+                  <div style={{ padding: "14px 20px", borderBottom: "1px solid #f1f5f9", fontWeight: 600, fontSize: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span>📥 Leads à traiter</span>
+                    <span style={{ fontSize: 12, color: "#94a3b8" }}>{ag.leads_a_traiter.length} en attente</span>
+                  </div>
+                  {ag.leads_a_traiter.map((l, i) => (
+                    <div key={i} style={{ padding: "12px 20px", borderBottom: i < ag.leads_a_traiter.length - 1 ? "1px solid #f1f5f9" : "none", display: "flex", alignItems: "center", gap: 12 }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ fontWeight: 600, fontSize: 13 }}>{l.nom}</span>
+                          {l.urgent && <Badge label="Urgent" type="urgent" />}
+                        </div>
+                        <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>{l.demande} · {l.societe}</div>
+                      </div>
+                      <Badge label={l.source} type={l.source === "Jotform" ? "chaud" : l.source === "Outlook" ? "dev" : "normal"} />
+                      <div style={{ fontSize: 12, color: l.jours > 3 ? "#dc2626" : "#94a3b8", fontWeight: 600, minWidth: 70, textAlign: "right" }}>
+                        {l.jours}j sans suivi
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Devis à relancer */}
+                <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: 14, overflow: "hidden", marginBottom: 16 }}>
+                  <div style={{ padding: "14px 20px", borderBottom: "1px solid #f1f5f9", fontWeight: 600, fontSize: 14 }}>
+                    💬 Devis à relancer — actions suggérées par l'agent
+                  </div>
+                  {ag.devis_a_relancer.map((d, i) => (
+                    <div key={i} style={{ padding: "14px 20px", borderBottom: i < ag.devis_a_relancer.length - 1 ? "1px solid #f1f5f9" : "none" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
+                        <div style={{ flex: 1, fontWeight: 600, fontSize: 13 }}>{d.client} <span style={{ fontWeight: 400, color: "#94a3b8", fontSize: 12 }}>· {d.societe}</span></div>
+                        <div style={{ fontSize: 14, fontWeight: 700 }}>{d.montant.toLocaleString("fr-FR")} €</div>
+                        <Badge label={`${d.jours}j`} type="urgent" />
+                      </div>
+                      <div style={{ fontSize: 12, color: "#64748b", paddingLeft: 0, fontStyle: "italic" }}>→ {d.action}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Activité agent */}
+                <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: 14, padding: "16px 20px" }}>
+                  <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12 }}>📋 Activité récente de l'agent</div>
+                  {ag.actions_agent.map((a, i) => (
+                    <div key={i} style={{ display: "flex", gap: 12, padding: "8px 0", borderBottom: i < ag.actions_agent.length - 1 ? "1px solid #f1f5f9" : "none", alignItems: "center" }}>
+                      <div style={{ fontSize: 11, color: "#94a3b8", minWidth: 130 }}>{a.date}</div>
+                      <Badge label={a.type} type="dev" />
+                      <div style={{ flex: 1, fontSize: 12, color: "#475569" }}>{a.desc}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* ─── AGENTS ─── */}
+          {tab === "agents" && (
             <div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 14 }}>
-                {data.apps.map((app, i) => (
-                  <div key={i} style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: 14, padding: "18px 20px" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                      <div style={{ fontWeight: 700, fontSize: 15 }}>{app.nom}</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 14 }}>
+                {data.agents.map((app, i) => (
+                  <div
+                    key={i}
+                    onClick={() => app.onglet && setTab(app.onglet)}
+                    style={{
+                      background: "#fff",
+                      border: "1px solid #e8ecf0",
+                      borderLeft: `4px solid ${app.couleur}`,
+                      borderRadius: 14,
+                      padding: "18px 20px",
+                      cursor: app.onglet ? "pointer" : "default",
+                      transition: "transform .15s ease, box-shadow .15s ease",
+                    }}
+                    onMouseEnter={(e) => app.onglet && (e.currentTarget.style.transform = "translateY(-2px)", e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,.06)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.transform = "translateY(0)", e.currentTarget.style.boxShadow = "none")}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
+                      <div style={{ fontSize: 28, width: 44, height: 44, background: app.couleur + "15", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        {app.icone}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 700, fontSize: 15 }}>{app.nom}</div>
+                        <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 1 }}>{app.env !== "—" ? `Hébergé : ${app.env}` : "Hébergement à définir"}</div>
+                      </div>
                       <Badge label={app.statut} type={app.statut === "Actif" ? "ok" : "dev"} />
                     </div>
-                    <div style={{ fontSize: 12, color: "#64748b", marginBottom: 12 }}>{app.desc}</div>
-                    {app.env !== "—" && <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 8 }}>Hébergement : {app.env}</div>}
+
+                    <div style={{ fontSize: 12, color: "#475569", marginBottom: 12, lineHeight: 1.5 }}>{app.desc}</div>
+
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 12 }}>
+                      {app.sources?.map((src, j) => (
+                        <span key={j} style={{ fontSize: 10, padding: "2px 8px", background: "#f1f5f9", color: "#64748b", borderRadius: 99, fontWeight: 500 }}>
+                          {src}
+                        </span>
+                      ))}
+                    </div>
+
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                      <span style={{ fontSize: 11, color: "#94a3b8" }}>Avancement</span>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: app.couleur }}>{app.avancement}%</span>
+                      <span style={{ fontSize: 11, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 600 }}>Avancement</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: app.couleur }}>{app.avancement}%</span>
                     </div>
                     <ProgressBar value={app.avancement} color={app.couleur} />
+
+                    {app.onglet && (
+                      <div style={{ marginTop: 12, fontSize: 11, color: app.couleur, fontWeight: 600 }}>
+                        → Voir le tableau de bord agent
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
+
               <div style={{ marginTop: 20, background: "#f8fafc", border: "1px solid #e8ecf0", borderRadius: 12, padding: "16px 20px" }}>
                 <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>Roadmap déploiement</div>
                 {[
