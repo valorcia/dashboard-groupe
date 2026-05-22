@@ -90,12 +90,31 @@ const data = {
     ],
   },
   agents: [
-    { nom: "Commercial", icone: "🎯", statut: "En dev", env: "Vercel", avancement: 40, desc: "Analyse leads, traçabilité, relances devis", couleur: "#dc2626", sources: ["Odoo CRM", "Outlook", "Jotform"], onglet: "commercial-agent" },
-    { nom: "Planneo", icone: "📅", statut: "Actif", env: "AWS", avancement: 80, desc: "Planning chantiers — API à développer", couleur: "#2d7a5a", sources: ["Planneo API"] },
-    { nom: "SEO-AUTO", icone: "📈", statut: "En dev", env: "—", avancement: 35, desc: "Automatisation SEO contenu", couleur: "#2e6da4", sources: ["GSC", "GA4"] },
-    { nom: "Smart-Deal", icone: "💼", statut: "En dev", env: "—", avancement: 20, desc: "Optimisation devis & closing", couleur: "#6b3fa0", sources: ["Odoo Vente"] },
-    { nom: "CoachMe", icone: "🧠", statut: "En dev", env: "—", avancement: 15, desc: "Coaching IA équipes terrain", couleur: "#b5600c", sources: ["Mobile équipes"] },
+    { nom: "Commercial", icone: "🎯", avatarSeed: "commercial-bot-42", statut: "En dev", env: "Vercel", avancement: 40, desc: "Analyse leads, traçabilité, relances devis", couleur: "#dc2626", sources: ["Odoo CRM", "Outlook", "Jotform"], onglet: "commercial-agent" },
+    { nom: "Planneo", icone: "📅", avatarSeed: "planneo-bot-77", statut: "Actif", env: "AWS", avancement: 80, desc: "Planning chantiers — API à développer", couleur: "#2d7a5a", sources: ["Planneo API"] },
+    { nom: "SEO-AUTO", icone: "📈", avatarSeed: "seo-bot-19", statut: "En dev", env: "—", avancement: 35, desc: "Automatisation SEO contenu", couleur: "#2e6da4", sources: ["GSC", "GA4"] },
+    { nom: "Smart-Deal", icone: "💼", avatarSeed: "smartdeal-bot-88", statut: "En dev", env: "—", avancement: 20, desc: "Optimisation devis & closing", couleur: "#6b3fa0", sources: ["Odoo Vente"] },
+    { nom: "CoachMe", icone: "🧠", avatarSeed: "coachme-bot-33", statut: "En dev", env: "—", avancement: 15, desc: "Coaching IA équipes terrain", couleur: "#b5600c", sources: ["Mobile équipes"] },
   ],
+  tresorerieHebdo: {
+    source_fichier: "Tresorerie_Groupe_2026.xlsx",
+    onedrive_path: "OneDrive/Finance/",
+    derniere_maj: "2026-05-22 06:30",
+    semaines: [
+      { semaine: "S10", label: "3-9 mar", entrees: 28400, sorties: 22100 },
+      { semaine: "S11", label: "10-16 mar", entrees: 31200, sorties: 24800 },
+      { semaine: "S12", label: "17-23 mar", entrees: 26800, sorties: 29400 },
+      { semaine: "S13", label: "24-30 mar", entrees: 42100, sorties: 27600 },
+      { semaine: "S14", label: "31-6 avr", entrees: 38500, sorties: 31200 },
+      { semaine: "S15", label: "7-13 avr", entrees: 51200, sorties: 28900 },
+      { semaine: "S16", label: "14-20 avr", entrees: 44800, sorties: 35100 },
+      { semaine: "S17", label: "21-27 avr", entrees: 48600, sorties: 41200 },
+      { semaine: "S18", label: "28-4 mai", entrees: 56100, sorties: 33400 },
+      { semaine: "S19", label: "5-11 mai", entrees: 49200, sorties: 38800 },
+      { semaine: "S20", label: "12-18 mai", entrees: 53400, sorties: 42100 },
+      { semaine: "S21", label: "19-22 mai", entrees: 31200, sorties: 27800 },
+    ],
+  },
   commercialAgent: {
     connexions: [
       { service: "Odoo CRM", statut: "connecté", icone: "🟢", desc: "Lecture pipeline & opportunités" },
@@ -132,6 +151,13 @@ const data = {
 };
 
 const MOIS = ["Jan", "Fév", "Mar", "Avr", "Mai", "Jun"];
+
+// Génère l'URL d'un avatar robot DiceBear pour un agent.
+// Service public, pas d'API key, SVG renvoyé directement.
+function agentAvatarUrl(seed, color) {
+  const bg = (color || "#1e293b").replace("#", "");
+  return `https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${encodeURIComponent(seed)}&backgroundColor=${bg}&radius=20`;
+}
 
 function MiniBar({ values, color }) {
   const max = Math.max(...values);
@@ -185,6 +211,29 @@ export default function Dashboard() {
   const [commercialLive, setCommercialLive] = useState(null);
   const [commercialStatus, setCommercialStatus] = useState("idle"); // idle | loading | live | error
   const [commercialError, setCommercialError] = useState(null);
+  const [tresorerieLive, setTresorerieLive] = useState(null);
+  const [tresorerieStatus, setTresorerieStatus] = useState("idle");
+  const [tresorerieError, setTresorerieError] = useState(null);
+
+  useEffect(() => {
+    if (tab !== "finance" || tresorerieStatus === "loading" || tresorerieStatus === "live") return;
+    setTresorerieStatus("loading");
+    fetch("/api/tresorerie")
+      .then(r => r.json())
+      .then(d => {
+        if (d.ok) {
+          setTresorerieLive(d);
+          setTresorerieStatus("live");
+        } else {
+          setTresorerieError(d.error || "Erreur OneDrive");
+          setTresorerieStatus("error");
+        }
+      })
+      .catch(e => {
+        setTresorerieError(e.message);
+        setTresorerieStatus("error");
+      });
+  }, [tab, tresorerieStatus]);
 
   useEffect(() => {
     if (tab !== "commercial-agent" || commercialStatus === "loading" || commercialStatus === "live") return;
@@ -438,6 +487,111 @@ export default function Dashboard() {
                   />
                 ))}
               </div>
+
+              {/* ─ Graphique entrées / sorties hebdomadaire ─ */}
+              {(() => {
+                const tresor = (tresorerieStatus === "live" && tresorerieLive?.semaines?.length > 0)
+                  ? tresorerieLive
+                  : data.tresorerieHebdo;
+                const semaines = tresor.semaines;
+                const totalEntrees = semaines.reduce((a, w) => a + w.entrees, 0);
+                const totalSorties = semaines.reduce((a, w) => a + w.sorties, 0);
+                const soldeNet = totalEntrees - totalSorties;
+                const maxVal = Math.max(...semaines.map(w => Math.max(w.entrees, w.sorties)));
+                const status = tresorerieStatus === "loading" ? { label: "⏳ Chargement OneDrive…", bg: "#fef3c7", fg: "#92400e" }
+                  : tresorerieStatus === "live" ? { label: "🟢 Live OneDrive", bg: "#d1fae5", fg: "#065f46" }
+                  : tresorerieStatus === "error" ? { label: "⚠ OneDrive — données simulées", bg: "#fee2e2", fg: "#991b1b" }
+                  : { label: "📦 Données simulées", bg: "#e0e7ff", fg: "#3730a3" };
+
+                return (
+                  <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: 14, padding: "20px 22px", marginBottom: 20 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 2 }}>Trésorerie hebdomadaire — entrées vs sorties</div>
+                        <div style={{ fontSize: 11, color: "#94a3b8" }}>
+                          📁 {tresor.source_fichier || "Excel OneDrive"} · MAJ {tresor.derniere_maj || "—"}
+                        </div>
+                        {tresorerieError && <div style={{ fontSize: 11, color: "#dc2626", marginTop: 4, fontStyle: "italic" }}>{tresorerieError}</div>}
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
+                        <span style={{ background: status.bg, color: status.fg, padding: "3px 10px", borderRadius: 99, fontSize: 11, fontWeight: 700 }}>{status.label}</span>
+                        <button
+                          onClick={() => { setTresorerieStatus("idle"); setTresorerieLive(null); setTresorerieError(null); }}
+                          style={{ background: "#f8fafc", color: "#475569", border: "1px solid #cbd5e1", padding: "3px 10px", borderRadius: 6, fontSize: 11, cursor: "pointer", fontWeight: 500 }}
+                        >🔄 Rafraîchir</button>
+                      </div>
+                    </div>
+
+                    {/* KPIs entrées / sorties / solde */}
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, marginBottom: 18 }}>
+                      <div style={{ background: "#ecfdf5", border: "1px solid #bbf7d0", borderRadius: 10, padding: "10px 14px" }}>
+                        <div style={{ fontSize: 10, color: "#065f46", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.6 }}>↑ Entrées 12s</div>
+                        <div style={{ fontSize: 18, fontWeight: 700, color: "#059669" }}>{(totalEntrees / 1000).toFixed(1)}k€</div>
+                      </div>
+                      <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10, padding: "10px 14px" }}>
+                        <div style={{ fontSize: 10, color: "#991b1b", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.6 }}>↓ Sorties 12s</div>
+                        <div style={{ fontSize: 18, fontWeight: 700, color: "#dc2626" }}>{(totalSorties / 1000).toFixed(1)}k€</div>
+                      </div>
+                      <div style={{ background: soldeNet >= 0 ? "#eff6ff" : "#fef2f2", border: "1px solid " + (soldeNet >= 0 ? "#bfdbfe" : "#fecaca"), borderRadius: 10, padding: "10px 14px" }}>
+                        <div style={{ fontSize: 10, color: soldeNet >= 0 ? "#1e40af" : "#991b1b", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.6 }}>= Solde net</div>
+                        <div style={{ fontSize: 18, fontWeight: 700, color: soldeNet >= 0 ? "#2563eb" : "#dc2626" }}>{soldeNet >= 0 ? "+" : ""}{(soldeNet / 1000).toFixed(1)}k€</div>
+                      </div>
+                    </div>
+
+                    {/* Graphique miroir entrées (haut) / sorties (bas) */}
+                    <div style={{ position: "relative", padding: "0 0 4px" }}>
+                      <div style={{ display: "flex", alignItems: "stretch", gap: 6, height: 200 }}>
+                        {semaines.map((w, i) => {
+                          const solde = w.entrees - w.sorties;
+                          return (
+                            <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", minWidth: 0 }}>
+                              {/* Partie haute : entrées */}
+                              <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end", width: "100%", padding: "0 1px" }}>
+                                <div title={`Entrées ${w.label} : ${w.entrees.toLocaleString("fr-FR")} €`}
+                                  style={{
+                                    height: `${(w.entrees / maxVal) * 100}%`,
+                                    background: "linear-gradient(180deg, #10b981 0%, #059669 100%)",
+                                    borderRadius: "4px 4px 0 0",
+                                    minHeight: 3,
+                                    cursor: "help",
+                                  }} />
+                              </div>
+                              {/* Axe central */}
+                              <div style={{ height: 1, background: "#cbd5e1", width: "100%" }} />
+                              {/* Partie basse : sorties */}
+                              <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-start", width: "100%", padding: "0 1px" }}>
+                                <div title={`Sorties ${w.label} : ${w.sorties.toLocaleString("fr-FR")} €`}
+                                  style={{
+                                    height: `${(w.sorties / maxVal) * 100}%`,
+                                    background: "linear-gradient(180deg, #ef4444 0%, #dc2626 100%)",
+                                    borderRadius: "0 0 4px 4px",
+                                    minHeight: 3,
+                                    cursor: "help",
+                                  }} />
+                              </div>
+                              {/* Label semaine + solde */}
+                              <div style={{ fontSize: 10, color: "#64748b", marginTop: 4, fontWeight: 600 }}>{w.semaine}</div>
+                              <div style={{ fontSize: 9, color: solde >= 0 ? "#059669" : "#dc2626", fontWeight: 700 }}>
+                                {solde >= 0 ? "+" : ""}{(solde / 1000).toFixed(0)}k
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", justifyContent: "center", gap: 18, marginTop: 12, fontSize: 11, color: "#64748b" }}>
+                      <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                        <span style={{ width: 10, height: 10, background: "#10b981", borderRadius: 2 }} /> Entrées
+                      </span>
+                      <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                        <span style={{ width: 10, height: 10, background: "#ef4444", borderRadius: 2 }} /> Sorties
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
+
               <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: 14, padding: "18px 20px" }}>
                 <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 14 }}>CA mensuel par société (6 derniers mois)</div>
                 {data.societes.map(s => (
@@ -617,7 +771,11 @@ export default function Dashboard() {
               <div>
                 {/* Bandeau agent */}
                 <div style={{ background: "linear-gradient(135deg, #dc2626 0%, #9f1239 100%)", borderRadius: 16, padding: "20px 24px", color: "#fff", marginBottom: 20, display: "flex", alignItems: "center", gap: 18 }}>
-                  <div style={{ fontSize: 42, lineHeight: 1 }}>🎯</div>
+                  <img
+                    src={agentAvatarUrl("commercial-bot-42", "ffffff")}
+                    alt="Avatar Agent Commercial"
+                    style={{ width: 72, height: 72, borderRadius: 14, background: "rgba(255,255,255,0.12)", padding: 4, flexShrink: 0 }}
+                  />
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 18, fontWeight: 700 }}>Agent Commercial</div>
                     <div style={{ fontSize: 13, opacity: 0.9, marginTop: 2 }}>Analyse leads, traçabilité, relances devis — multi-sociétés</div>
@@ -759,13 +917,20 @@ export default function Dashboard() {
                     onMouseEnter={(e) => app.onglet && (e.currentTarget.style.transform = "translateY(-2px)", e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,.06)")}
                     onMouseLeave={(e) => (e.currentTarget.style.transform = "translateY(0)", e.currentTarget.style.boxShadow = "none")}
                   >
-                    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
-                      <div style={{ fontSize: 28, width: 44, height: 44, background: app.couleur + "15", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        {app.icone}
+                    <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 12 }}>
+                      <div style={{ width: 64, height: 64, borderRadius: 14, background: `linear-gradient(135deg, ${app.couleur}20 0%, ${app.couleur}40 100%)`, padding: 4, flexShrink: 0, boxShadow: `0 2px 8px ${app.couleur}30` }}>
+                        <img
+                          src={agentAvatarUrl(app.avatarSeed, app.couleur)}
+                          alt={`Avatar ${app.nom}`}
+                          style={{ width: "100%", height: "100%", borderRadius: 10, display: "block" }}
+                        />
                       </div>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 700, fontSize: 15 }}>{app.nom}</div>
-                        <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 1 }}>{app.env !== "—" ? `Hébergé : ${app.env}` : "Hébergement à définir"}</div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ fontWeight: 700, fontSize: 16, color: "#1e293b" }}>{app.nom}</span>
+                          <span style={{ fontSize: 14, opacity: 0.6 }}>{app.icone}</span>
+                        </div>
+                        <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{app.env !== "—" ? `Hébergé : ${app.env}` : "Hébergement à définir"}</div>
                       </div>
                       <Badge label={app.statut} type={app.statut === "Actif" ? "ok" : "dev"} />
                     </div>
