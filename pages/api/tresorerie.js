@@ -1,19 +1,29 @@
 // Endpoint trésorerie hebdomadaire — lecture du fichier "Prévisionnel TRESO"
-// hébergé sur OneDrive, via Microsoft Graph (flow client_credentials).
+// sur SharePoint ou OneDrive personnel, via Microsoft Graph (client_credentials).
 //
-// Structure attendue du fichier (sheet "Prévisionnel TRESO") :
-//   - Ligne 4  : numéros de semaines (S43, S44, … , S28) en H:AS
-//   - Ligne 36 : total sorties hebdo (H:AS)
-//   - Ligne 91 : total entrées TTC hebdo (H:AS)
-//   - Ligne 95 : différence hebdo (entrées − sorties)
+// Structure attendue du fichier (sheet par défaut "Prévisionnel TRESO") :
+//   - Ligne 4  : numéros de semaines (S43 … S28) en H:AS
+//   - Ligne 36 : total sorties hebdo
+//   - Ligne 91 : total entrées TTC hebdo
+//   - Ligne 95 : différence (entrées − sorties)
 //   - Ligne 97 : trésorerie cumulée fin de semaine
 //
 // Variables d'env requises côté Vercel :
 //   MS_TENANT_ID, MS_CLIENT_ID, MS_CLIENT_SECRET
-//   ONEDRIVE_USER       — ex: loic@valorcia.com
-//   ONEDRIVE_FILE_PATH  — ex: /Finance/Previsionnel_Tresorerie_TDB.xlsx
-//   TRESORERIE_SHEET    — défaut: "Prévisionnel TRESO"
-//   TRESORERIE_RANGE    — défaut: "H4:AS97" (couvre toutes les lignes utiles)
+//
+//   Mode SharePoint (recommandé pour un fichier partagé) :
+//     SHAREPOINT_HOSTNAME    — ex "valorcia.sharepoint.com"
+//     SHAREPOINT_SITE_PATH   — ex "/sites/Groupe" (slash inclus)
+//     ONEDRIVE_FILE_PATH     — chemin dans la bibliothèque Documents,
+//                              ex "/Finance/Previsionnel_Tresorerie_TDB.xlsx"
+//
+//   Mode OneDrive perso (alternative) :
+//     ONEDRIVE_USER          — ex "loic@valorcia.com"
+//     ONEDRIVE_FILE_PATH     — chemin dans son OneDrive
+//
+//   Optionnels :
+//     TRESORERIE_SHEET       — défaut "Prévisionnel TRESO"
+//     TRESORERIE_RANGE       — défaut "H4:AS97"
 
 const GRAPH_BASE = 'https://graph.microsoft.com/v1.0';
 
@@ -35,21 +45,51 @@ async function getAccessToken() {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: body.toString(),
   });
-  if (!res.ok) throw new Error(`Auth Microsoft Graph échouée : HTTP ${res.status}`);
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`Auth Microsoft Graph échouée : HTTP ${res.status} — ${txt.slice(0, 200)}`);
+  }
   const data = await res.json();
   return data.access_token;
 }
 
-async function readExcelRange(token, user, filePath, sheet, range) {
-  const path = filePath.startsWith('/') ? filePath : `/${filePath}`;
-  const encodedPath = path.split('/').map(encodeURIComponent).join('/');
-  const url = `${GRAPH_BASE}/users/${encodeURIComponent(user)}/drive/root:${encodedPath}:/workbook/worksheets('${encodeURIComponent(sheet)}')/range(address='${encodeURIComponent(range)}')`;
+async function graphGet(url, token) {
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) {
     const txt = await res.text();
-    throw new Error(`Lecture Excel échouée : HTTP ${res.status} — ${txt.slice(0, 300)}`);
+    throw new Error(`Graph ${res.status} sur ${url.replace(GRAPH_BASE, '')} — ${txt.slice(0, 200)}`);
   }
   return res.json();
+}
+
+function encodePath(p) {
+  const path = p.startsWith('/') ? p : `/${p}`;
+  return path.split('/').map(encodeURIComponent).join('/');
+}
+
+// Résout l'URL de base du drive selon le mode (SharePoint ou OneDrive perso).
+async function getDriveBaseUrl(token) {
+  const spHost = process.env.SHAREPOINT_HOSTNAME;
+  const spSite = process.env.SHAREPOINT_SITE_PATH;
+
+  if (spHost && spSite) {
+    // Mode SharePoint : on résout d'abord le site-id.
+    const sitePath = spSite.startsWith('/') ? spSite : `/${spSite}`;
+    const siteUrl = `${GRAPH_BASE}/sites/${encodeURIComponent(spHost)}:${sitePath}`;
+    const site = await graphGet(siteUrl, token);
+    if (!site.id) throw new Error(`Site SharePoint introuvable : ${spHost}${sitePath}`);
+    return `${GRAPH_BASE}/sites/${site.id}/drive`;
+  }
+
+  const user = process.env.ONEDRIVE_USER;
+  if (user) return `${GRAPH_BASE}/users/${encodeURIComponent(user)}/drive`;
+
+  throw new Error('Configuration manquante : définir SHAREPOINT_HOSTNAME+SHAREPOINT_SITE_PATH ou ONEDRIVE_USER');
+}
+
+async function readExcelRange(token, driveBase, filePath, sheet, range) {
+  const url = `${driveBase}/root:${encodePath(filePath)}:/workbook/worksheets('${encodeURIComponent(sheet)}')/range(address='${encodeURIComponent(range)}')`;
+  return graphGet(url, token);
 }
 
 function toNum(v) {
@@ -59,26 +99,23 @@ function toNum(v) {
 }
 
 export default async function handler(req, res) {
-  const user = process.env.ONEDRIVE_USER;
   const file = process.env.ONEDRIVE_FILE_PATH;
   const sheet = process.env.TRESORERIE_SHEET || 'Prévisionnel TRESO';
   const range = process.env.TRESORERIE_RANGE || 'H4:AS97';
 
-  if (!user || !file) {
+  if (!file) {
     return res.status(501).json({
       ok: false,
-      error: 'OneDrive non configuré (ONEDRIVE_USER / ONEDRIVE_FILE_PATH manquants)',
+      error: 'ONEDRIVE_FILE_PATH manquant',
     });
   }
 
   try {
     const token = await getAccessToken();
-    const data = await readExcelRange(token, user, file, sheet, range);
+    const driveBase = await getDriveBaseUrl(token);
+    const data = await readExcelRange(token, driveBase, file, sheet, range);
     const values = data.values || [];
 
-    // values[0] = ligne 4 du sheet (semaines)
-    // values[32] = ligne 36 (sorties), values[87] = ligne 91 (entrées),
-    // values[91] = ligne 95 (différence), values[93] = ligne 97 (cumul)
     const rowSemaines = values[0] || [];
     const rowSorties = values[32] || [];
     const rowEntrees = values[87] || [];
@@ -103,6 +140,7 @@ export default async function handler(req, res) {
       ok: true,
       source_fichier: file.split('/').pop(),
       onedrive_path: file,
+      mode: process.env.SHAREPOINT_HOSTNAME ? 'sharepoint' : 'onedrive',
       derniere_maj: new Date().toISOString().slice(0, 16).replace('T', ' '),
       semaines,
     });
