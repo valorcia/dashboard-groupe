@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Head from "next/head";
 
 const data = {
@@ -182,6 +182,29 @@ function KpiCard({ label, value, sub, alert, color }) {
 export default function Dashboard() {
   const [tab, setTab] = useState("overview");
   const [societeActive, setSocieteActive] = useState("luca");
+  const [commercialLive, setCommercialLive] = useState(null);
+  const [commercialStatus, setCommercialStatus] = useState("idle"); // idle | loading | live | error
+  const [commercialError, setCommercialError] = useState(null);
+
+  useEffect(() => {
+    if (tab !== "commercial-agent" || commercialStatus === "loading" || commercialStatus === "live") return;
+    setCommercialStatus("loading");
+    fetch("/api/commercial")
+      .then(r => r.json())
+      .then(d => {
+        if (d.ok) {
+          setCommercialLive(d);
+          setCommercialStatus("live");
+        } else {
+          setCommercialError(d.error || "Erreur Odoo");
+          setCommercialStatus("error");
+        }
+      })
+      .catch(e => {
+        setCommercialError(e.message);
+        setCommercialStatus("error");
+      });
+  }, [tab, commercialStatus]);
 
   const societe = data.societes.find(s => s.id === societeActive);
   const totalTreso = data.societes.reduce((a, s) => a + s.tresorerie, 0);
@@ -568,8 +591,28 @@ export default function Dashboard() {
 
           {/* ─── AGENT COMMERCIAL ─── */}
           {tab === "commercial-agent" && (() => {
-            const ag = data.commercialAgent;
-            const totalSources = ag.sources_leads.reduce((a, s) => a + s.count, 0);
+            const mock = data.commercialAgent;
+            const isLive = commercialStatus === "live" && commercialLive;
+            const ag = isLive
+              ? {
+                  ...mock,
+                  kpis: commercialLive.kpis,
+                  sources_leads: commercialLive.sources_leads.length > 0 ? commercialLive.sources_leads : mock.sources_leads,
+                  leads_a_traiter: commercialLive.leads_a_traiter.length > 0 ? commercialLive.leads_a_traiter : mock.leads_a_traiter,
+                  devis_a_relancer: commercialLive.devis_a_relancer.length > 0 ? commercialLive.devis_a_relancer : mock.devis_a_relancer,
+                  connexions: mock.connexions.map(c =>
+                    c.service.startsWith("Odoo")
+                      ? { ...c, statut: "connecté", icone: "🟢" }
+                      : c
+                  ),
+                }
+              : mock;
+            const totalSources = ag.sources_leads.reduce((a, s) => a + s.count, 0) || 1;
+            const statusBadge =
+              commercialStatus === "loading" ? { label: "⏳ Chargement Odoo…", color: "#fef3c7", text: "#92400e" } :
+              commercialStatus === "live" ? { label: "🟢 Live Odoo", color: "#d1fae5", text: "#065f46" } :
+              commercialStatus === "error" ? { label: "⚠ Erreur Odoo — données simulées", color: "#fee2e2", text: "#991b1b" } :
+              { label: "📦 Données simulées", color: "#e0e7ff", text: "#3730a3" };
             return (
               <div>
                 {/* Bandeau agent */}
@@ -578,10 +621,20 @@ export default function Dashboard() {
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 18, fontWeight: 700 }}>Agent Commercial</div>
                     <div style={{ fontSize: 13, opacity: 0.9, marginTop: 2 }}>Analyse leads, traçabilité, relances devis — multi-sociétés</div>
+                    {commercialStatus === "error" && (
+                      <div style={{ fontSize: 11, opacity: 0.85, marginTop: 4, fontStyle: "italic" }}>{commercialError}</div>
+                    )}
                   </div>
-                  <div style={{ textAlign: "right" }}>
-                    <Badge label="En dev — 40%" type="dev" />
-                    <div style={{ fontSize: 11, opacity: 0.85, marginTop: 6 }}>Vercel · Node 20</div>
+                  <div style={{ textAlign: "right", display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
+                    <span style={{ background: statusBadge.color, color: statusBadge.text, padding: "4px 10px", borderRadius: 99, fontSize: 11, fontWeight: 700 }}>
+                      {statusBadge.label}
+                    </span>
+                    <button
+                      onClick={() => { setCommercialStatus("idle"); setCommercialLive(null); }}
+                      style={{ background: "rgba(255,255,255,0.15)", color: "#fff", border: "1px solid rgba(255,255,255,0.3)", padding: "3px 10px", borderRadius: 6, fontSize: 11, cursor: "pointer", fontWeight: 500 }}
+                    >
+                      🔄 Rafraîchir
+                    </button>
                   </div>
                 </div>
 
