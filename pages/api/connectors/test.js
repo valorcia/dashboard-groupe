@@ -145,6 +145,69 @@ async function testOutlook() {
   return steps;
 }
 
+async function testCalendar() {
+  const steps = [];
+  const tenant = await getConfigValue('MS_TENANT_ID');
+  const clientId = await getConfigValue('MS_CLIENT_ID');
+  const secret = await getConfigValue('MS_CLIENT_SECRET');
+  const mailbox = await getConfigValue('CALENDAR_MAILBOX');
+  const calId = await getConfigValue('CALENDAR_ID');
+  const tz = (await getConfigValue('CALENDAR_TZ')) || 'Europe/Paris';
+
+  steps.push({
+    step: 'Variables présentes',
+    ok: !!(tenant && clientId && secret && mailbox),
+    detail: { mailbox: mailbox || 'manquant', calId: calId || '(calendrier principal)', tz },
+  });
+  if (!tenant || !clientId || !secret || !mailbox) return steps;
+
+  let token;
+  try {
+    const body = new URLSearchParams({ client_id: clientId, client_secret: secret, scope: 'https://graph.microsoft.com/.default', grant_type: 'client_credentials' });
+    const r = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString() });
+    if (!r.ok) {
+      const txt = await r.text();
+      steps.push({ step: 'Token Azure AD', ok: false, error: `HTTP ${r.status} — ${txt.slice(0, 240)}` });
+      return steps;
+    }
+    const j = await r.json();
+    token = j.access_token;
+    const claims = JSON.parse(Buffer.from(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));
+    steps.push({ step: 'Token Azure AD', ok: true, detail: { roles: claims.roles } });
+    const hasCal = claims.roles?.some(r => r.startsWith('Calendars.'));
+    steps.push({ step: 'Permission Calendars.* dans le token', ok: !!hasCal, error: hasCal ? null : 'Aucun rôle Calendars.* trouvé. Ajouter "Calendars.Read" en Application permission + admin consent.' });
+    if (!hasCal) return steps;
+  } catch (e) {
+    steps.push({ step: 'Token Azure AD', ok: false, error: e.message });
+    return steps;
+  }
+
+  try {
+    const nowIso = new Date().toISOString();
+    const endIso = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
+    const calPath = calId ? `/calendars/${encodeURIComponent(calId)}` : '';
+    const u = `${GRAPH_BASE}/users/${encodeURIComponent(mailbox)}${calPath}/calendarView?startDateTime=${nowIso}&endDateTime=${endIso}&$top=5&$select=subject,start,end,organizer,location`;
+    const r = await fetch(u, { headers: { Authorization: `Bearer ${token}`, Prefer: `outlook.timezone="${tz}"` } });
+    if (!r.ok) {
+      const txt = await r.text();
+      steps.push({ step: 'Accès calendrier (7j à venir)', ok: false, error: `HTTP ${r.status} — ${txt.slice(0, 240)}` });
+      return steps;
+    }
+    const j = await r.json();
+    steps.push({
+      step: 'Accès calendrier (7j à venir)',
+      ok: true,
+      detail: {
+        count: j.value?.length || 0,
+        rdv: j.value?.map(e => ({ subject: e.subject?.slice(0, 60), start: e.start?.dateTime, organizer: e.organizer?.emailAddress?.address, location: e.location?.displayName })),
+      },
+    });
+  } catch (e) {
+    steps.push({ step: 'Accès calendrier', ok: false, error: e.message });
+  }
+  return steps;
+}
+
 async function testOdoo() {
   const steps = [];
   const url = await getConfigValue('ODOO_URL');
@@ -184,8 +247,9 @@ export default async function handler(req, res) {
   let steps;
   if (id === 'graph') steps = await testGraph();
   else if (id === 'outlook') steps = await testOutlook();
+  else if (id === 'calendar') steps = await testCalendar();
   else if (id === 'odoo') steps = await testOdoo();
-  else return res.status(400).json({ ok: false, error: 'id attendu : "graph", "outlook" ou "odoo"' });
+  else return res.status(400).json({ ok: false, error: 'id attendu : "graph", "outlook", "calendar" ou "odoo"' });
 
   return res.status(200).json({ ok: steps.every(s => s.ok), id, steps });
 }
