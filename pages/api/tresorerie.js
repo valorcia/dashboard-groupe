@@ -25,12 +25,14 @@
 //     TRESORERIE_SHEET       — défaut "Prévisionnel TRESO"
 //     TRESORERIE_RANGE       — défaut "H4:AS97"
 
+import { getConfigValue } from '../../lib/connectors';
+
 const GRAPH_BASE = 'https://graph.microsoft.com/v1.0';
 
 async function getAccessToken() {
-  const tenant = process.env.MS_TENANT_ID;
-  const clientId = process.env.MS_CLIENT_ID;
-  const secret = process.env.MS_CLIENT_SECRET;
+  const tenant = await getConfigValue('MS_TENANT_ID');
+  const clientId = await getConfigValue('MS_CLIENT_ID');
+  const secret = await getConfigValue('MS_CLIENT_SECRET');
   if (!tenant || !clientId || !secret) {
     throw new Error('Microsoft Graph non configuré (MS_TENANT_ID / MS_CLIENT_ID / MS_CLIENT_SECRET manquants)');
   }
@@ -69,11 +71,10 @@ function encodePath(p) {
 
 // Résout l'URL de base du drive selon le mode (SharePoint ou OneDrive perso).
 async function getDriveBaseUrl(token) {
-  const spHost = process.env.SHAREPOINT_HOSTNAME;
-  const spSite = process.env.SHAREPOINT_SITE_PATH;
+  const spHost = await getConfigValue('SHAREPOINT_HOSTNAME');
+  const spSite = await getConfigValue('SHAREPOINT_SITE_PATH');
 
   if (spHost && spSite) {
-    // Mode SharePoint : on résout d'abord le site-id.
     const sitePath = spSite.startsWith('/') ? spSite : `/${spSite}`;
     const siteUrl = `${GRAPH_BASE}/sites/${encodeURIComponent(spHost)}:${sitePath}`;
     const site = await graphGet(siteUrl, token);
@@ -81,7 +82,7 @@ async function getDriveBaseUrl(token) {
     return `${GRAPH_BASE}/sites/${site.id}/drive`;
   }
 
-  const user = process.env.ONEDRIVE_USER;
+  const user = await getConfigValue('ONEDRIVE_USER');
   if (user) return `${GRAPH_BASE}/users/${encodeURIComponent(user)}/drive`;
 
   throw new Error('Configuration manquante : définir SHAREPOINT_HOSTNAME+SHAREPOINT_SITE_PATH ou ONEDRIVE_USER');
@@ -99,9 +100,9 @@ function toNum(v) {
 }
 
 export default async function handler(req, res) {
-  const file = process.env.ONEDRIVE_FILE_PATH;
-  const sheet = process.env.TRESORERIE_SHEET || 'Prévisionnel TRESO';
-  const range = process.env.TRESORERIE_RANGE || 'H4:AS97';
+  const file = await getConfigValue('ONEDRIVE_FILE_PATH');
+  const sheet = (await getConfigValue('TRESORERIE_SHEET')) || 'Prévisionnel TRESO';
+  const range = (await getConfigValue('TRESORERIE_RANGE')) || 'H4:AS97';
   const isDiag = req.query.diag === '1';
 
   if (!file && !isDiag) {
@@ -114,9 +115,9 @@ export default async function handler(req, res) {
   // Mode diagnostic : test progressif de chaque étape de l'auth Graph.
   if (isDiag) {
     const steps = [];
-    const tenant = process.env.MS_TENANT_ID;
-    const clientId = process.env.MS_CLIENT_ID;
-    const secret = process.env.MS_CLIENT_SECRET;
+    const tenant = await getConfigValue('MS_TENANT_ID');
+    const clientId = await getConfigValue('MS_CLIENT_ID');
+    const secret = await getConfigValue('MS_CLIENT_SECRET');
 
     steps.push({
       step: '1. Variables d\'env',
@@ -125,9 +126,9 @@ export default async function handler(req, res) {
         MS_TENANT_ID: tenant ? `${tenant.slice(0, 8)}…${tenant.slice(-4)}` : 'MANQUANT',
         MS_CLIENT_ID: clientId ? `${clientId.slice(0, 8)}…${clientId.slice(-4)}` : 'MANQUANT',
         MS_CLIENT_SECRET: secret ? `(${secret.length} chars)` : 'MANQUANT',
-        SHAREPOINT_HOSTNAME: process.env.SHAREPOINT_HOSTNAME || '(non défini)',
-        SHAREPOINT_SITE_PATH: process.env.SHAREPOINT_SITE_PATH || '(non défini)',
-        ONEDRIVE_USER: process.env.ONEDRIVE_USER || '(non défini)',
+        SHAREPOINT_HOSTNAME: (await getConfigValue('SHAREPOINT_HOSTNAME')) || '(non défini)',
+        SHAREPOINT_SITE_PATH: (await getConfigValue('SHAREPOINT_SITE_PATH')) || '(non défini)',
+        ONEDRIVE_USER: (await getConfigValue('ONEDRIVE_USER')) || '(non défini)',
         ONEDRIVE_FILE_PATH: file || '(non défini)',
       },
     });
@@ -174,17 +175,20 @@ export default async function handler(req, res) {
       steps.push({ step: '3. /organization', ok: false, error: e.message });
     }
 
-    if (process.env.SHAREPOINT_HOSTNAME && process.env.SHAREPOINT_SITE_PATH) {
-      const sitePath = process.env.SHAREPOINT_SITE_PATH.startsWith('/') ? process.env.SHAREPOINT_SITE_PATH : `/${process.env.SHAREPOINT_SITE_PATH}`;
+    const spHostDiag = await getConfigValue('SHAREPOINT_HOSTNAME');
+    const spSiteDiag = await getConfigValue('SHAREPOINT_SITE_PATH');
+    const odUserDiag = await getConfigValue('ONEDRIVE_USER');
+    if (spHostDiag && spSiteDiag) {
+      const sitePath = spSiteDiag.startsWith('/') ? spSiteDiag : `/${spSiteDiag}`;
       try {
-        const site = await graphGet(`${GRAPH_BASE}/sites/${encodeURIComponent(process.env.SHAREPOINT_HOSTNAME)}:${sitePath}`, token);
+        const site = await graphGet(`${GRAPH_BASE}/sites/${encodeURIComponent(spHostDiag)}:${sitePath}`, token);
         steps.push({ step: '4. Résolution site SharePoint', ok: true, detail: { id: site.id, name: site.displayName, webUrl: site.webUrl } });
       } catch (e) {
         steps.push({ step: '4. Résolution site SharePoint', ok: false, error: e.message });
       }
-    } else if (process.env.ONEDRIVE_USER) {
+    } else if (odUserDiag) {
       try {
-        const user = await graphGet(`${GRAPH_BASE}/users/${encodeURIComponent(process.env.ONEDRIVE_USER)}`, token);
+        const user = await graphGet(`${GRAPH_BASE}/users/${encodeURIComponent(odUserDiag)}`, token);
         steps.push({ step: '4. Résolution utilisateur', ok: true, detail: { id: user.id, upn: user.userPrincipalName, mail: user.mail } });
       } catch (e) {
         steps.push({ step: '4. Résolution utilisateur', ok: false, error: e.message });
@@ -224,7 +228,7 @@ export default async function handler(req, res) {
       ok: true,
       source_fichier: file.split('/').pop(),
       onedrive_path: file,
-      mode: process.env.SHAREPOINT_HOSTNAME ? 'sharepoint' : 'onedrive',
+      mode: (await getConfigValue('SHAREPOINT_HOSTNAME')) ? 'sharepoint' : 'onedrive',
       derniere_maj: new Date().toISOString().slice(0, 16).replace('T', ' '),
       semaines,
     });

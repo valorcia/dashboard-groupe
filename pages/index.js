@@ -355,10 +355,18 @@ export default function Dashboard() {
         </div>
 
         {/* Nav */}
-        <div style={{ background: "#fff", borderBottom: "1px solid #e8ecf0", padding: "0 28px", display: "flex", gap: 4, overflowX: "auto" }}>
+        <div style={{ background: "#fff", borderBottom: "1px solid #e8ecf0", padding: "0 28px", display: "flex", gap: 4, overflowX: "auto", alignItems: "center" }}>
           {tabs.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)} style={navStyle(t.id)}>{t.label}</button>
           ))}
+          <a
+            href="/connectors"
+            style={{ marginLeft: "auto", padding: "10px 14px", fontSize: 12, fontWeight: 600, color: "#64748b", textDecoration: "none", borderBottom: "3px solid transparent", whiteSpace: "nowrap" }}
+            onMouseEnter={(e) => e.currentTarget.style.color = "#1e293b"}
+            onMouseLeave={(e) => e.currentTarget.style.color = "#64748b"}
+          >
+            🔌 Connecteurs
+          </a>
         </div>
 
         <div style={{ padding: "24px 28px", maxWidth: 1100 }}>
