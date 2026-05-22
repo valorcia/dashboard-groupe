@@ -360,8 +360,14 @@ export default function Dashboard() {
             <button key={t.id} onClick={() => setTab(t.id)} style={navStyle(t.id)}>{t.label}</button>
           ))}
           <a
+            href="/kpi"
+            style={{ marginLeft: "auto", padding: "10px 14px", fontSize: 12, fontWeight: 700, color: "#fff", background: "#E67E22", textDecoration: "none", borderRadius: 8, whiteSpace: "nowrap", marginRight: 8 }}
+          >
+            📊 KPI Groupe
+          </a>
+          <a
             href="/connectors"
-            style={{ marginLeft: "auto", padding: "10px 14px", fontSize: 12, fontWeight: 600, color: "#64748b", textDecoration: "none", borderBottom: "3px solid transparent", whiteSpace: "nowrap" }}
+            style={{ padding: "10px 14px", fontSize: 12, fontWeight: 600, color: "#64748b", textDecoration: "none", borderBottom: "3px solid transparent", whiteSpace: "nowrap" }}
             onMouseEnter={(e) => e.currentTarget.style.color = "#1e293b"}
             onMouseLeave={(e) => e.currentTarget.style.color = "#64748b"}
           >
