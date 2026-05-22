@@ -90,11 +90,40 @@ const data = {
     ],
   },
   agents: [
-    { nom: "Commercial", icone: "🎯", avatarSeed: "commercial-bot-42", statut: "En dev", env: "Vercel", avancement: 40, desc: "Analyse leads, traçabilité, relances devis", couleur: "#dc2626", sources: ["Odoo CRM", "Outlook", "Jotform"], onglet: "commercial-agent" },
-    { nom: "Planneo", icone: "📅", avatarSeed: "planneo-bot-77", statut: "Actif", env: "AWS", avancement: 80, desc: "Planning chantiers — API à développer", couleur: "#2d7a5a", sources: ["Planneo API"] },
-    { nom: "SEO-AUTO", icone: "📈", avatarSeed: "seo-bot-19", statut: "En dev", env: "—", avancement: 35, desc: "Automatisation SEO contenu", couleur: "#2e6da4", sources: ["GSC", "GA4"] },
-    { nom: "Smart-Deal", icone: "💼", avatarSeed: "smartdeal-bot-88", statut: "En dev", env: "—", avancement: 20, desc: "Optimisation devis & closing", couleur: "#6b3fa0", sources: ["Odoo Vente"] },
-    { nom: "CoachMe", icone: "🧠", avatarSeed: "coachme-bot-33", statut: "En dev", env: "—", avancement: 15, desc: "Coaching IA équipes terrain", couleur: "#b5600c", sources: ["Mobile équipes"] },
+    // ─── Commercial ─────────────────────────────────────────────────────
+    { nom: "Agent Commercial", icone: "🎯", avatarSeed: "commercial-bot-42", type: "AGENT", categorie: "Commercial", statut: "En dev", env: "Vercel", avancement: 40, desc: "Analyse leads, traçabilité, relances devis", couleur: "#dc2626", sources: ["Odoo CRM", "Outlook", "Jotform"], onglet: "commercial-agent" },
+    { nom: "/devis-relance", icone: "📨", avatarSeed: "devis-bot-11", type: "SKILL", categorie: "Commercial", statut: "Actif", env: "Vercel", avancement: 70, desc: "Relance automatique devis sans réponse > 7j", couleur: "#ef4444", sources: ["Odoo Vente", "Outlook"] },
+    { nom: "/lead-qualif", icone: "🔎", avatarSeed: "lead-bot-22", type: "SKILL", categorie: "Commercial", statut: "En dev", env: "—", avancement: 30, desc: "Qualification auto des leads entrants (BANT)", couleur: "#f97316", sources: ["Jotform", "Outlook"] },
+    { nom: "Closing Coach", icone: "🎙️", avatarSeed: "closing-bot-55", type: "MISSION", categorie: "Commercial", statut: "Concept", env: "—", avancement: 10, desc: "Coach IA pour finaliser les gros deals (> 30k€)", couleur: "#b91c1c", sources: ["Odoo Vente"] },
+
+    // ─── Comptabilité ───────────────────────────────────────────────────
+    { nom: "Agent Compta", icone: "📊", avatarSeed: "compta-bot-01", type: "AGENT", categorie: "Comptabilité", statut: "En dev", env: "Vercel", avancement: 25, desc: "Rapprochements bancaires, alertes anomalies", couleur: "#0891b2", sources: ["Odoo Compta", "Banque"] },
+    { nom: "/facture-relance", icone: "💰", avatarSeed: "facture-bot-31", type: "ROUTINE", categorie: "Comptabilité", statut: "Actif", env: "Vercel", avancement: 65, desc: "Relance impayés à J+15 / J+30 / J+45", couleur: "#0e7490", sources: ["Odoo Compta", "Email"] },
+    { nom: "/tresorerie-alerte", icone: "🚨", avatarSeed: "treso-bot-44", type: "HOOK", categorie: "Comptabilité", statut: "Actif", env: "Vercel", avancement: 90, desc: "Alerte Slack si tréso société < seuil critique", couleur: "#0284c7", sources: ["OneDrive Excel"], onglet: "finance" },
+    { nom: "/tva-mensuelle", icone: "🧾", avatarSeed: "tva-bot-67", type: "ROUTINE", categorie: "Comptabilité", statut: "En dev", env: "—", avancement: 20, desc: "Préparation déclaration TVA mensuelle multi-pays", couleur: "#1e40af", sources: ["Odoo Compta"] },
+
+    // ─── Opérations ─────────────────────────────────────────────────────
+    { nom: "Agent Chantiers", icone: "🏗️", avatarSeed: "chantier-bot-13", type: "AGENT", categorie: "Opérations", statut: "En dev", env: "—", avancement: 30, desc: "Suivi avancement, alertes retards, photos terrain", couleur: "#16a34a", sources: ["Planneo", "Mobile équipes"], onglet: "chantiers" },
+    { nom: "Planneo", icone: "📅", avatarSeed: "planneo-bot-77", type: "AGENT", categorie: "Opérations", statut: "Actif", env: "AWS", avancement: 80, desc: "Planning chantiers — API à développer", couleur: "#2d7a5a", sources: ["Planneo API"] },
+    { nom: "/sav-triage", icone: "🛠️", avatarSeed: "sav-bot-89", type: "SKILL", categorie: "Opérations", statut: "Concept", env: "—", avancement: 5, desc: "Tri SAV par urgence + assignation technicien", couleur: "#15803d", sources: ["Outlook", "Téléphone"] },
+    { nom: "/equipe-allocation", icone: "👥", avatarSeed: "team-bot-21", type: "MISSION", categorie: "Opérations", statut: "Concept", env: "—", avancement: 0, desc: "Optimisation allocation équipes A/B/C par chantier", couleur: "#14532d", sources: ["Planneo"] },
+
+    // ─── Brand & Digital ────────────────────────────────────────────────
+    { nom: "SEO-AUTO", icone: "📈", avatarSeed: "seo-bot-19", type: "AGENT", categorie: "Brand & Digital", statut: "En dev", env: "—", avancement: 35, desc: "Automatisation SEO contenu multi-sites", couleur: "#2e6da4", sources: ["GSC", "GA4"] },
+    { nom: "/content-ideas", icone: "💡", avatarSeed: "ideas-bot-34", type: "SKILL", categorie: "Brand & Digital", statut: "Actif", env: "Vercel", avancement: 60, desc: "Idées de contenu blog mensuelles par société", couleur: "#3b82f6", sources: ["GSC", "Trends"] },
+    { nom: "/social-post", icone: "📱", avatarSeed: "social-bot-56", type: "ROUTINE", categorie: "Brand & Digital", statut: "En dev", env: "—", avancement: 25, desc: "Posts auto Instagram + LinkedIn + Facebook", couleur: "#7c3aed", sources: ["Meta API", "LinkedIn API"] },
+    { nom: "/ads-optimizer", icone: "🎯", avatarSeed: "ads-bot-78", type: "ROUTINE", categorie: "Brand & Digital", statut: "Concept", env: "—", avancement: 5, desc: "Optim CPA Google Ads + Meta hebdomadaire", couleur: "#6366f1", sources: ["Google Ads", "Meta Ads"] },
+
+    // ─── Secrétariat ────────────────────────────────────────────────────
+    { nom: "Agent Secrétaire", icone: "📋", avatarSeed: "secretary-bot-99", type: "AGENT", categorie: "Secrétariat", statut: "En dev", env: "Vercel", avancement: 40, desc: "Gestion TODOs, briefing mails, agenda quotidien", couleur: "#a855f7", sources: ["Gmail", "Outlook", "Calendars"] },
+    { nom: "/todo", icone: "✅", avatarSeed: "todo-bot-12", type: "SKILL", categorie: "Secrétariat", statut: "Actif", env: "Vercel", avancement: 80, desc: "Ajout / check / suppression TODO avec rappels", couleur: "#c084fc", sources: ["KV Storage"] },
+    { nom: "/inbox-triage", icone: "📥", avatarSeed: "inbox-bot-23", type: "SKILL", categorie: "Secrétariat", statut: "En dev", env: "—", avancement: 30, desc: "Tri intelligent inbox Gmail + Outlook par priorité", couleur: "#9333ea", sources: ["Gmail API", "Microsoft Graph"] },
+    { nom: "/agenda", icone: "🗓️", avatarSeed: "agenda-bot-45", type: "SKILL", categorie: "Secrétariat", statut: "En dev", env: "—", avancement: 35, desc: "Briefing matin : RDV du jour + prep par RDV", couleur: "#7e22ce", sources: ["Google Calendar", "Outlook Calendar"] },
+
+    // ─── Dev Apps ───────────────────────────────────────────────────────
+    { nom: "Smart-Deal", icone: "💼", avatarSeed: "smartdeal-bot-88", type: "AGENT", categorie: "Dev Apps", statut: "En dev", env: "—", avancement: 20, desc: "Optimisation devis & closing piscines/spas", couleur: "#6b3fa0", sources: ["Odoo Vente"] },
+    { nom: "CoachMe", icone: "🧠", avatarSeed: "coachme-bot-33", type: "AGENT", categorie: "Dev Apps", statut: "En dev", env: "—", avancement: 15, desc: "Coaching IA équipes terrain via mobile", couleur: "#b5600c", sources: ["Mobile équipes"] },
+    { nom: "Worker Claude Local", icone: "🤖", avatarSeed: "worker-bot-00", type: "HOOK", categorie: "Dev Apps", statut: "Concept", env: "Local Mac", avancement: 5, desc: "Worker local qui exécute les ordres via Claude Code (abo Max)", couleur: "#475569", sources: ["KV Queue", "Claude CLI"] },
   ],
   tresorerieHebdo: {
     source_fichier: "Previsionnel_Tresorerie_TDB.xlsx",
@@ -208,6 +237,7 @@ function KpiCard({ label, value, sub, alert, color }) {
 export default function Dashboard() {
   const [tab, setTab] = useState("overview");
   const [societeActive, setSocieteActive] = useState("luca");
+  const [agentTypeFilter, setAgentTypeFilter] = useState("ALL");
   const [commercialLive, setCommercialLive] = useState(null);
   const [commercialStatus, setCommercialStatus] = useState("idle"); // idle | loading | live | error
   const [commercialError, setCommercialError] = useState(null);
@@ -957,67 +987,166 @@ export default function Dashboard() {
           })()}
 
           {/* ─── AGENTS ─── */}
-          {tab === "agents" && (
+          {tab === "agents" && (() => {
+            const TYPE_META = {
+              AGENT:   { color: "#1e293b", bg: "#e2e8f0", desc: "Agent autonome" },
+              SKILL:   { color: "#0c4a6e", bg: "#e0f2fe", desc: "Action ponctuelle" },
+              MISSION: { color: "#831843", bg: "#fce7f3", desc: "Multi-étapes" },
+              ROUTINE: { color: "#065f46", bg: "#d1fae5", desc: "Récurrent planifié" },
+              HOOK:    { color: "#78350f", bg: "#fef3c7", desc: "Déclenché par événement" },
+            };
+            const CATEGORIES = ["Commercial", "Comptabilité", "Opérations", "Brand & Digital", "Secrétariat", "Dev Apps"];
+            const typeFilter = agentTypeFilter;
+
+            const filtered = data.agents.filter(a => typeFilter === "ALL" || a.type === typeFilter);
+            const totalByType = data.agents.reduce((acc, a) => { acc[a.type] = (acc[a.type] || 0) + 1; return acc; }, {});
+            const actifs = data.agents.filter(a => a.statut === "Actif").length;
+            const enDev = data.agents.filter(a => a.statut === "En dev").length;
+            const concepts = data.agents.filter(a => a.statut === "Concept").length;
+            const avgAdv = Math.round(data.agents.reduce((s, a) => s + a.avancement, 0) / data.agents.length);
+
+            return (
             <div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 14 }}>
-                {data.agents.map((app, i) => (
-                  <div
-                    key={i}
-                    onClick={() => app.onglet && setTab(app.onglet)}
-                    style={{
-                      background: "#fff",
-                      border: "1px solid #e8ecf0",
-                      borderLeft: `4px solid ${app.couleur}`,
-                      borderRadius: 14,
-                      padding: "18px 20px",
-                      cursor: app.onglet ? "pointer" : "default",
-                      transition: "transform .15s ease, box-shadow .15s ease",
-                    }}
-                    onMouseEnter={(e) => app.onglet && (e.currentTarget.style.transform = "translateY(-2px)", e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,.06)")}
-                    onMouseLeave={(e) => (e.currentTarget.style.transform = "translateY(0)", e.currentTarget.style.boxShadow = "none")}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 12 }}>
-                      <div style={{ width: 64, height: 64, borderRadius: 14, background: `linear-gradient(135deg, ${app.couleur}20 0%, ${app.couleur}40 100%)`, padding: 4, flexShrink: 0, boxShadow: `0 2px 8px ${app.couleur}30` }}>
-                        <img
-                          src={agentAvatarUrl(app.avatarSeed, app.couleur)}
-                          alt={`Avatar ${app.nom}`}
-                          style={{ width: "100%", height: "100%", borderRadius: 10, display: "block" }}
-                        />
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          <span style={{ fontWeight: 700, fontSize: 16, color: "#1e293b" }}>{app.nom}</span>
-                          <span style={{ fontSize: 14, opacity: 0.6 }}>{app.icone}</span>
-                        </div>
-                        <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{app.env !== "—" ? `Hébergé : ${app.env}` : "Hébergement à définir"}</div>
-                      </div>
-                      <Badge label={app.statut} type={app.statut === "Actif" ? "ok" : "dev"} />
+              {/* En-tête : titre + KPIs */}
+              <div style={{ background: "linear-gradient(135deg, #1e293b 0%, #334155 100%)", color: "#fff", borderRadius: 16, padding: "22px 24px", marginBottom: 18, boxShadow: "0 4px 16px rgba(15,23,42,.1)" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
+                  <div>
+                    <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.3 }}>🤖 Réseau agentique Valorcia</div>
+                    <div style={{ fontSize: 13, opacity: 0.75, marginTop: 4 }}>
+                      {data.agents.length} agents · {Object.keys(TYPE_META).length} types · {CATEGORIES.length} catégories
                     </div>
-
-                    <div style={{ fontSize: 12, color: "#475569", marginBottom: 12, lineHeight: 1.5 }}>{app.desc}</div>
-
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 12 }}>
-                      {app.sources?.map((src, j) => (
-                        <span key={j} style={{ fontSize: 10, padding: "2px 8px", background: "#f1f5f9", color: "#64748b", borderRadius: 99, fontWeight: 500 }}>
-                          {src}
-                        </span>
-                      ))}
-                    </div>
-
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                      <span style={{ fontSize: 11, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 600 }}>Avancement</span>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: app.couleur }}>{app.avancement}%</span>
-                    </div>
-                    <ProgressBar value={app.avancement} color={app.couleur} />
-
-                    {app.onglet && (
-                      <div style={{ marginTop: 12, fontSize: 11, color: app.couleur, fontWeight: 600 }}>
-                        → Voir le tableau de bord agent
-                      </div>
-                    )}
                   </div>
+                  <div style={{ display: "flex", gap: 22 }}>
+                    <div style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: 22, fontWeight: 700, color: "#86efac" }}>{actifs}</div>
+                      <div style={{ fontSize: 10, opacity: 0.7, textTransform: "uppercase", letterSpacing: 0.6 }}>Actifs</div>
+                    </div>
+                    <div style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: 22, fontWeight: 700, color: "#fcd34d" }}>{enDev}</div>
+                      <div style={{ fontSize: 10, opacity: 0.7, textTransform: "uppercase", letterSpacing: 0.6 }}>En dev</div>
+                    </div>
+                    <div style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: 22, fontWeight: 700, color: "#cbd5e1" }}>{concepts}</div>
+                      <div style={{ fontSize: 10, opacity: 0.7, textTransform: "uppercase", letterSpacing: 0.6 }}>Concept</div>
+                    </div>
+                    <div style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: 22, fontWeight: 700, color: "#a78bfa" }}>{avgAdv}%</div>
+                      <div style={{ fontSize: 10, opacity: 0.7, textTransform: "uppercase", letterSpacing: 0.6 }}>Avancement moy.</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Filtres par type */}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 18 }}>
+                <button
+                  onClick={() => setAgentTypeFilter("ALL")}
+                  style={{
+                    padding: "8px 14px", borderRadius: 99, border: "1px solid #cbd5e1",
+                    background: typeFilter === "ALL" ? "#1e293b" : "#fff",
+                    color: typeFilter === "ALL" ? "#fff" : "#475569",
+                    fontSize: 12, fontWeight: 600, cursor: "pointer",
+                  }}
+                >
+                  Tous · {data.agents.length}
+                </button>
+                {Object.entries(TYPE_META).map(([t, m]) => (
+                  <button
+                    key={t}
+                    onClick={() => setAgentTypeFilter(t)}
+                    title={m.desc}
+                    style={{
+                      padding: "8px 14px", borderRadius: 99, border: `1px solid ${m.color}33`,
+                      background: typeFilter === t ? m.color : m.bg,
+                      color: typeFilter === t ? "#fff" : m.color,
+                      fontSize: 12, fontWeight: 600, cursor: "pointer",
+                    }}
+                  >
+                    {t} · {totalByType[t] || 0}
+                  </button>
                 ))}
               </div>
+
+              {/* Grille par catégorie */}
+              {CATEGORIES.map(cat => {
+                const agentsInCat = filtered.filter(a => a.categorie === cat);
+                if (agentsInCat.length === 0) return null;
+                return (
+                  <div key={cat} style={{ marginBottom: 28 }}>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 12, paddingBottom: 8, borderBottom: "2px solid #f1f5f9" }}>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: "#1e293b", letterSpacing: -0.2 }}>{cat}</div>
+                      <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 500 }}>{agentsInCat.length} agent{agentsInCat.length > 1 ? "s" : ""}</div>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 14 }}>
+                      {agentsInCat.map((app, i) => {
+                        const typeMeta = TYPE_META[app.type] || TYPE_META.AGENT;
+                        return (
+                        <div
+                          key={i}
+                          onClick={() => app.onglet && setTab(app.onglet)}
+                          style={{
+                            background: "#fff",
+                            border: "1px solid #e8ecf0",
+                            borderLeft: `4px solid ${app.couleur}`,
+                            borderRadius: 14,
+                            padding: "18px 20px",
+                            cursor: app.onglet ? "pointer" : "default",
+                            transition: "transform .15s ease, box-shadow .15s ease",
+                            position: "relative",
+                          }}
+                          onMouseEnter={(e) => app.onglet && (e.currentTarget.style.transform = "translateY(-2px)", e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,.06)")}
+                          onMouseLeave={(e) => (e.currentTarget.style.transform = "translateY(0)", e.currentTarget.style.boxShadow = "none")}
+                        >
+                          {/* Badge type en haut à droite */}
+                          <div style={{ position: "absolute", top: 12, right: 12, padding: "2px 8px", background: typeMeta.bg, color: typeMeta.color, fontSize: 9, fontWeight: 700, borderRadius: 4, letterSpacing: 0.6 }}>
+                            {app.type}
+                          </div>
+
+                          <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 12 }}>
+                            <div style={{ width: 64, height: 64, borderRadius: 14, background: `linear-gradient(135deg, ${app.couleur}20 0%, ${app.couleur}40 100%)`, padding: 4, flexShrink: 0, boxShadow: `0 2px 8px ${app.couleur}30` }}>
+                              <img
+                                src={agentAvatarUrl(app.avatarSeed, app.couleur)}
+                                alt={`Avatar ${app.nom}`}
+                                style={{ width: "100%", height: "100%", borderRadius: 10, display: "block" }}
+                              />
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0, paddingRight: 40 }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                <span style={{ fontWeight: 700, fontSize: 15, color: "#1e293b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{app.nom}</span>
+                                <span style={{ fontSize: 14, opacity: 0.6 }}>{app.icone}</span>
+                              </div>
+                              <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{app.env !== "—" ? `Hébergé : ${app.env}` : "Hébergement à définir"}</div>
+                            </div>
+                          </div>
+
+                          <div style={{ fontSize: 12, color: "#475569", marginBottom: 12, lineHeight: 1.5, minHeight: 36 }}>{app.desc}</div>
+
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 12 }}>
+                            {app.sources?.map((src, j) => (
+                              <span key={j} style={{ fontSize: 10, padding: "2px 8px", background: "#f1f5f9", color: "#64748b", borderRadius: 99, fontWeight: 500 }}>
+                                {src}
+                              </span>
+                            ))}
+                          </div>
+
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                            <Badge label={app.statut} type={app.statut === "Actif" ? "ok" : app.statut === "Concept" ? "normal" : "dev"} />
+                            <span style={{ fontSize: 13, fontWeight: 700, color: app.couleur }}>{app.avancement}%</span>
+                          </div>
+                          <ProgressBar value={app.avancement} color={app.couleur} />
+
+                          {app.onglet && (
+                            <div style={{ marginTop: 12, fontSize: 11, color: app.couleur, fontWeight: 600 }}>
+                              → Voir le tableau de bord agent
+                            </div>
+                          )}
+                        </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
 
               <div style={{ marginTop: 20, background: "#f8fafc", border: "1px solid #e8ecf0", borderRadius: 12, padding: "16px 20px" }}>
                 <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>Roadmap déploiement</div>
@@ -1037,7 +1166,8 @@ export default function Dashboard() {
                 ))}
               </div>
             </div>
-          )}
+            );
+          })()}
         </div>
       </div>
     </>
