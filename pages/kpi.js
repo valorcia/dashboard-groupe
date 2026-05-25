@@ -1,6 +1,8 @@
-import { useState, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
+
+const ViewModeCtx = React.createContext('cards');
 
 // ─── Données démo ────────────────────────────────────────────────────────
 const SOCIETES = [
@@ -90,19 +92,94 @@ function KpiCard({ label, value, target, unit = '', sub, source, inverse = false
 }
 
 function Section({ title, icon, children, accent = '#E67E22' }) {
+  const viewMode = React.useContext(ViewModeCtx);
+  const header = (
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10, paddingLeft: 8, borderLeft: `3px solid ${accent}` }}>
+      <span style={{ fontSize: 16 }}>{icon}</span>
+      <div style={{ fontSize: 15, fontWeight: 700, color: '#1e293b', letterSpacing: -0.2 }}>{title}</div>
+    </div>
+  );
+  if (viewMode === 'table') {
+    const rows = React.Children.toArray(children).filter(c => c && c.type === KpiCard).map(c => c.props);
+    return (
+      <div style={{ marginBottom: 18 }}>
+        {header}
+        <KpiTable rows={rows} />
+      </div>
+    );
+  }
   return (
     <div style={{ marginBottom: 22 }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10, paddingLeft: 8, borderLeft: `3px solid ${accent}` }}>
-        <span style={{ fontSize: 16 }}>{icon}</span>
-        <div style={{ fontSize: 15, fontWeight: 700, color: '#1e293b', letterSpacing: -0.2 }}>{title}</div>
-      </div>
+      {header}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>{children}</div>
     </div>
   );
 }
 
+function KpiTable({ rows }) {
+  const thStyle = { padding: '9px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, background: '#f8fafc', borderBottom: '1px solid #e8ecf0' };
+  const thR = { ...thStyle, textAlign: 'right' };
+  return (
+    <div style={{ background: '#fff', border: '1px solid #e8ecf0', borderRadius: 10, overflow: 'hidden' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>
+        <thead>
+          <tr>
+            <th style={thStyle}>Indicateur</th>
+            <th style={thR}>Valeur</th>
+            <th style={thR}>Cible</th>
+            <th style={thR}>% atteinte</th>
+            <th style={{ ...thStyle, width: 140 }}>Progression</th>
+            <th style={thStyle}>Source</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => {
+            const ratio = typeof r.value === 'number' && typeof r.target === 'number' && r.target > 0
+              ? (r.inverse ? r.target / Math.max(r.value, 0.0001) : r.value / r.target) : null;
+            const statusColor = r.color || ratioColor(ratio);
+            const pct = ratio == null ? null : Math.max(0, Math.min(100, ratio * 100));
+            return (
+              <tr key={i} style={{ borderBottom: i < rows.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+                <td style={{ padding: '10px 12px', borderLeft: `3px solid ${statusColor}` }}>
+                  <div style={{ fontWeight: 600, color: '#1e293b' }}>{r.label}</div>
+                  {r.sub && <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{r.sub}</div>}
+                </td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, color: '#1e293b' }}>
+                  {typeof r.value === 'number' ? fmt(r.value, r.unit, r.decimals) : r.value || '—'}
+                </td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', color: '#64748b' }}>
+                  {typeof r.target === 'number' ? fmt(r.target, r.unit, r.decimals) : '—'}
+                </td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, color: statusColor }}>
+                  {ratio != null ? Math.round(ratio * 100) + '%' : '—'}
+                </td>
+                <td style={{ padding: '10px 12px' }}>
+                  {pct != null && (
+                    <div style={{ height: 6, background: '#f1f5f9', borderRadius: 99, overflow: 'hidden' }}>
+                      <div style={{ width: `${pct}%`, height: '100%', background: statusColor, borderRadius: 99 }} />
+                    </div>
+                  )}
+                </td>
+                <td style={{ padding: '10px 12px', color: '#94a3b8', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4 }}>{r.source || '—'}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function HideInTable({ children }) {
+  const viewMode = React.useContext(ViewModeCtx);
+  if (viewMode === 'table') return null;
+  return children;
+}
+
 // ─── Donut ───────────────────────────────────────────────────────────────
 function Donut({ data, size = 140, label, centerValue }) {
+  const viewMode = React.useContext(ViewModeCtx);
+  if (viewMode === 'table') return null;
   const total = data.reduce((s, d) => s + d.value, 0) || 1;
   const radius = size / 2 - 12;
   const cx = size / 2, cy = size / 2;
@@ -149,6 +226,8 @@ function Donut({ data, size = 140, label, centerValue }) {
 
 // ─── BarChart (stacked) ──────────────────────────────────────────────────
 function BarChart({ data, series, label, height = 220, unit = '€' }) {
+  const viewMode = React.useContext(ViewModeCtx);
+  if (viewMode === 'table') return null;
   const max = Math.max(...data.map(d => series.reduce((s, k) => s + (d[k.key] || 0), 0)));
   const w = Math.max(380, data.length * 50);
   const padding = { top: 20, right: 12, bottom: 28, left: 50 };
@@ -201,6 +280,8 @@ function BarChart({ data, series, label, height = 220, unit = '€' }) {
 
 // ─── LineChart ───────────────────────────────────────────────────────────
 function LineChart({ data, series, label, height = 220, unit = '€' }) {
+  const viewMode = React.useContext(ViewModeCtx);
+  if (viewMode === 'table') return null;
   const allVals = data.flatMap(d => series.map(s => d[s.key] || 0));
   const max = Math.max(...allVals);
   const min = Math.min(0, ...allVals);
@@ -261,6 +342,8 @@ function LineChart({ data, series, label, height = 220, unit = '€' }) {
 
 // ─── Gauge ───────────────────────────────────────────────────────────────
 function Gauge({ value, max = 1, label, sub, decimals = 0, unit = '%', size = 150 }) {
+  const viewMode = React.useContext(ViewModeCtx);
+  if (viewMode === 'table') return null;
   const ratio = Math.max(0, Math.min(1, value / max));
   const color = ratioColor(ratio);
   const cx = size / 2, cy = size * 0.7;
@@ -302,6 +385,7 @@ export default function KpiGroupe() {
   const [vue, setVue] = useState('groupe');
   const [periode, setPeriode] = useState('mois');
   const [mois, setMois] = useState(() => new Date().toISOString().slice(0, 7));
+  const [viewMode, setViewMode] = useState('cards');
 
   const totals = useMemo(() => {
     const sum = (k) => SOCIETES.reduce((s, soc) => s + KPI_DEMO[soc.id][k], 0);
@@ -352,11 +436,24 @@ export default function KpiGroupe() {
                   </button>
                 ))}
                 <input type="month" value={mois} onChange={(e) => setMois(e.target.value)} style={{ padding: '7px 10px', borderRadius: 8, border: '1px solid #334155', background: '#0f172a', color: '#cbd5e1', fontSize: 12, fontFamily: 'inherit' }} />
+                <div style={{ display: 'flex', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: 2, gap: 2 }}>
+                  <button
+                    onClick={() => setViewMode('cards')}
+                    title="Affichage en cartes"
+                    style={{ padding: '5px 10px', borderRadius: 6, border: 'none', background: viewMode === 'cards' ? '#E67E22' : 'transparent', color: viewMode === 'cards' ? '#fff' : '#94a3b8', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                  >▦ Cartes</button>
+                  <button
+                    onClick={() => setViewMode('table')}
+                    title="Affichage en tableau"
+                    style={{ padding: '5px 10px', borderRadius: 6, border: 'none', background: viewMode === 'table' ? '#E67E22' : 'transparent', color: viewMode === 'table' ? '#fff' : '#94a3b8', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                  >☰ Tableau</button>
+                </div>
                 <button onClick={() => window.location.reload()} style={{ padding: '7px 14px', borderRadius: 8, border: 'none', background: '#E67E22', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>🔄 Actualiser</button>
               </div>
             </div>
           </div>
 
+          <ViewModeCtx.Provider value={viewMode}>
           {/* Sous-onglets */}
           <div style={{ display: 'flex', gap: 4, background: '#fff', borderRadius: 12, padding: 4, marginBottom: 18, border: '1px solid #e8ecf0', overflowX: 'auto' }}>
             {SOUS_ONGLETS.map(s => (
@@ -398,37 +495,46 @@ export default function KpiGroupe() {
                 <KpiCard label="Impayés groupe" value={totals.impayes} target={CIBLES.impayes} unit="€" inverse color={totals.impayes === 0 ? '#16a34a' : '#dc2626'} source="Odoo" />
               </Section>
 
-              <div style={{ marginBottom: 22 }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10, paddingLeft: 8, borderLeft: '3px solid #8E44AD' }}>
-                  <span style={{ fontSize: 16 }}>📊</span>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: '#1e293b' }}>Répartition par société</div>
+              <HideInTable>
+                <div style={{ marginBottom: 22 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10, paddingLeft: 8, borderLeft: '3px solid #8E44AD' }}>
+                    <span style={{ fontSize: 16 }}>📊</span>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: '#1e293b' }}>Répartition par société</div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+                    <Donut data={donutCa} label="CA par société" centerValue={fmt(totals.caTotal, '€')} />
+                    <Donut data={donutLeads} label="Leads par société" centerValue={`${totals.leads} leads`} />
+                    <Donut data={donutAffaires} label="Affaires en cours" centerValue={`${totals.affaires}`} />
+                  </div>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
-                  <Donut data={donutCa} label="CA par société" centerValue={fmt(totals.caTotal, '€')} />
-                  <Donut data={donutLeads} label="Leads par société" centerValue={`${totals.leads} leads`} />
-                  <Donut data={donutAffaires} label="Affaires en cours" centerValue={`${totals.affaires}`} />
-                </div>
-              </div>
+              </HideInTable>
             </>
           )}
 
           {/* ───── GRAPHIQUES ───── */}
           {vue === 'graphiques' && (
             <>
+              {viewMode === 'table' && (
+                <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 10, padding: '14px 18px', fontSize: 13, color: '#78350f', textAlign: 'center' }}>
+                  ☰ Mode tableau actif — cet onglet contient uniquement des graphiques. Bascule en <button onClick={() => setViewMode('cards')} style={{ background: 'none', border: 'none', color: '#E67E22', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}>▦ Cartes</button> pour les voir, ou passe sur un autre sous-onglet.
+                </div>
+              )}
               <BarChart data={CA_HISTORIQUE} series={seriesCA} label="CA mensuel par société (12 mois)" height={260} />
               <div style={{ height: 14 }} />
               <LineChart data={CA_HISTORIQUE} series={seriesCA} label="Évolution CA — courbes" height={240} />
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginTop: 14 }}>
-                <Gauge value={totals.occupation} label="Taux occupation" sub="Équipes vs capacité" />
-                <Gauge value={totals.margeBrute} label="Marge brute" />
-                <Gauge value={totals.conversion} label="Conversion devis→cmd" />
-                <Gauge value={totals.respectDelais} label="Respect délais" />
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, marginTop: 14 }}>
-                <Donut data={donutCa} label="Répartition CA" centerValue={fmt(totals.caTotal, '€')} />
-                <Donut data={donutLeads} label="Sources leads" centerValue={`${totals.leads}`} />
-                <Donut data={donutHeures} label="Heures planifiées" centerValue={`${totals.heures} h`} />
-              </div>
+              <HideInTable>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginTop: 14 }}>
+                  <Gauge value={totals.occupation} label="Taux occupation" sub="Équipes vs capacité" />
+                  <Gauge value={totals.margeBrute} label="Marge brute" />
+                  <Gauge value={totals.conversion} label="Conversion devis→cmd" />
+                  <Gauge value={totals.respectDelais} label="Respect délais" />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, marginTop: 14 }}>
+                  <Donut data={donutCa} label="Répartition CA" centerValue={fmt(totals.caTotal, '€')} />
+                  <Donut data={donutLeads} label="Sources leads" centerValue={`${totals.leads}`} />
+                  <Donut data={donutHeures} label="Heures planifiées" centerValue={`${totals.heures} h`} />
+                </div>
+              </HideInTable>
             </>
           )}
 
@@ -575,12 +681,14 @@ export default function KpiGroupe() {
                 <KpiCard label="Effectif total" value={totals.effectif} target={CIBLES.effectif} source="Planneo" />
               </Section>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginBottom: 14 }}>
-                <Gauge value={totals.occupation} label="Taux occupation" />
-                <Gauge value={totals.respectDelais} label="Respect délais" />
-                <Donut data={donutAffaires} label="Affaires par société" centerValue={`${totals.affaires}`} />
-                <Donut data={SOCIETES.map(s => ({ value: KPI_DEMO[s.id].sav, label: `${s.flag} ${s.nom}`, color: s.couleur }))} label="SAV ouverts" centerValue={`${totals.sav}`} />
-              </div>
+              <HideInTable>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginBottom: 14 }}>
+                  <Gauge value={totals.occupation} label="Taux occupation" />
+                  <Gauge value={totals.respectDelais} label="Respect délais" />
+                  <Donut data={donutAffaires} label="Affaires par société" centerValue={`${totals.affaires}`} />
+                  <Donut data={SOCIETES.map(s => ({ value: KPI_DEMO[s.id].sav, label: `${s.flag} ${s.nom}`, color: s.couleur }))} label="SAV ouverts" centerValue={`${totals.sav}`} />
+                </div>
+              </HideInTable>
 
               <BarChart
                 data={SOCIETES.map(s => ({ mois: s.flag + ' ' + s.nom, piscines: KPI_DEMO[s.id].piscines, spas: KPI_DEMO[s.id].spas }))}
@@ -621,17 +729,20 @@ export default function KpiGroupe() {
                 })}
               </Section>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
-                <Donut data={donutHeures} label="Heures planifiées" centerValue={`${totals.heures} h`} />
-                <Donut data={donutMasse} label="Masse salariale" centerValue={fmt(totals.masseSalariale, '€')} />
-                <Gauge value={1 - totals.sousTraitance} label="Taux internes" sub="vs sous-traitance" />
-              </div>
+              <HideInTable>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+                  <Donut data={donutHeures} label="Heures planifiées" centerValue={`${totals.heures} h`} />
+                  <Donut data={donutMasse} label="Masse salariale" centerValue={fmt(totals.masseSalariale, '€')} />
+                  <Gauge value={1 - totals.sousTraitance} label="Taux internes" sub="vs sous-traitance" />
+                </div>
+              </HideInTable>
             </>
           )}
 
           <div style={{ marginTop: 22, padding: '12px 16px', background: '#fff', border: '1px solid #e8ecf0', borderRadius: 10, fontSize: 11, color: '#64748b', textAlign: 'center' }}>
             Données démo · Brancher Odoo + Planneo + Google Ads/GSC/GA4/Meta via <Link href="/connectors" style={{ color: '#E67E22', fontWeight: 700 }}>🔌 Connecteurs</Link> pour passer en live.
           </div>
+          </ViewModeCtx.Provider>
 
         </div>
       </div>
