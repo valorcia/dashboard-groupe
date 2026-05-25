@@ -208,6 +208,59 @@ async function testCalendar() {
   return steps;
 }
 
+// Tests "stub" pour les connecteurs marketing/planneo : vérifient seulement
+// la présence des credentials. L'implémentation OAuth complète (Google Ads,
+// GA4, Meta, etc.) viendra quand les flows OAuth seront branchés.
+async function testStubFields(prefix, required, optional = []) {
+  const steps = [];
+  const missing = [];
+  const present = {};
+  for (const k of required) {
+    const v = await getConfigValue(k);
+    if (!v) missing.push(k);
+    else present[k] = v.length > 20 ? `${v.slice(0, 8)}…(${v.length} chars)` : v;
+  }
+  for (const k of optional) {
+    const v = await getConfigValue(k);
+    if (v) present[k] = v.length > 20 ? `${v.slice(0, 8)}…(${v.length} chars)` : v;
+  }
+  steps.push({
+    step: 'Variables requises présentes',
+    ok: missing.length === 0,
+    detail: missing.length ? { manquantes: missing, présentes: present } : present,
+    error: missing.length ? `Manquantes : ${missing.join(', ')}` : null,
+  });
+  steps.push({
+    step: 'Appel API live',
+    ok: false,
+    error: `Flow OAuth non encore branché pour ${prefix}. Stub : credentials détectés mais la lecture live des stats sera ajoutée en phase 2.`,
+  });
+  return steps;
+}
+
+async function testGads()     { return testStubFields('Google Ads',     ['GADS_DEVELOPER_TOKEN', 'GADS_CLIENT_ID', 'GADS_CLIENT_SECRET', 'GADS_REFRESH_TOKEN'], ['GADS_CUSTOMER_SPA', 'GADS_CUSTOMER_LUCA', 'GADS_CUSTOMER_VALORCIA']); }
+async function testGsc()      { return testStubFields('Search Console', ['GSC_CLIENT_ID', 'GSC_CLIENT_SECRET', 'GSC_REFRESH_TOKEN'], ['GSC_SITE_SPA', 'GSC_SITE_LUCA', 'GSC_SITE_VALORCIA']); }
+async function testGa4()      { return testStubFields('Analytics 4',    ['GA4_SERVICE_ACCOUNT_JSON'], ['GA4_PROPERTY_SPA', 'GA4_PROPERTY_LUCA', 'GA4_PROPERTY_VALORCIA']); }
+async function testMeta()     { return testStubFields('Meta Ads',       ['META_APP_ID', 'META_APP_SECRET', 'META_ACCESS_TOKEN'], ['META_AD_ACCOUNT_SPA', 'META_AD_ACCOUNT_LUCA', 'META_AD_ACCOUNT_VALORCIA']); }
+async function testInstagram(){ return testStubFields('Instagram',      ['IG_ACCESS_TOKEN'], ['IG_BUSINESS_SPA', 'IG_BUSINESS_LUCA', 'IG_BUSINESS_VALORCIA']); }
+async function testGmb()      { return testStubFields('My Business',    ['GMB_CLIENT_ID', 'GMB_CLIENT_SECRET', 'GMB_REFRESH_TOKEN'], ['GMB_LOCATION_SPA', 'GMB_LOCATION_LUCA', 'GMB_LOCATION_VALORCIA']); }
+
+async function testPlanneo() {
+  const steps = [];
+  const url = await getConfigValue('PLANNEO_URL');
+  const key = await getConfigValue('PLANNEO_API_KEY');
+  steps.push({ step: 'Variables présentes', ok: !!(url && key), detail: { url, apiKey: key ? `(${key.length} chars)` : 'manquant' } });
+  if (!url || !key) return steps;
+  try {
+    const r = await fetch(`${url.replace(/\/$/, '')}/api/health`, { headers: { Authorization: `Bearer ${key}` } });
+    if (r.ok) steps.push({ step: 'Ping /api/health', ok: true, detail: { status: r.status } });
+    else steps.push({ step: 'Ping /api/health', ok: false, error: `HTTP ${r.status}` });
+  } catch (e) {
+    steps.push({ step: 'Ping /api/health', ok: false, error: e.message });
+  }
+  return steps;
+}
+
 async function testOdoo() {
   const steps = [];
   const url = await getConfigValue('ODOO_URL');
@@ -249,7 +302,14 @@ export default async function handler(req, res) {
   else if (id === 'outlook') steps = await testOutlook();
   else if (id === 'calendar') steps = await testCalendar();
   else if (id === 'odoo') steps = await testOdoo();
-  else return res.status(400).json({ ok: false, error: 'id attendu : "graph", "outlook", "calendar" ou "odoo"' });
+  else if (id === 'gads') steps = await testGads();
+  else if (id === 'gsc') steps = await testGsc();
+  else if (id === 'ga4') steps = await testGa4();
+  else if (id === 'meta') steps = await testMeta();
+  else if (id === 'instagram') steps = await testInstagram();
+  else if (id === 'gmb') steps = await testGmb();
+  else if (id === 'planneo') steps = await testPlanneo();
+  else return res.status(400).json({ ok: false, error: 'id de connecteur inconnu' });
 
   return res.status(200).json({ ok: steps.every(s => s.ok), id, steps });
 }

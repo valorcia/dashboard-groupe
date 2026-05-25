@@ -360,8 +360,14 @@ export default function Dashboard() {
             <button key={t.id} onClick={() => setTab(t.id)} style={navStyle(t.id)}>{t.label}</button>
           ))}
           <a
+            href="/plan"
+            style={{ marginLeft: "auto", padding: "10px 14px", fontSize: 12, fontWeight: 700, color: "#fff", background: "#6b21a8", textDecoration: "none", borderRadius: 8, whiteSpace: "nowrap", marginRight: 8 }}
+          >
+            🧠 Plan de progression
+          </a>
+          <a
             href="/kpi"
-            style={{ marginLeft: "auto", padding: "10px 14px", fontSize: 12, fontWeight: 700, color: "#fff", background: "#E67E22", textDecoration: "none", borderRadius: 8, whiteSpace: "nowrap", marginRight: 8 }}
+            style={{ padding: "10px 14px", fontSize: 12, fontWeight: 700, color: "#fff", background: "#E67E22", textDecoration: "none", borderRadius: 8, whiteSpace: "nowrap", marginRight: 8 }}
           >
             📊 KPI Groupe
           </a>

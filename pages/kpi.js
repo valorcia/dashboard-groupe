@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 
@@ -17,12 +17,24 @@ const KPI_DEMO = {
   valorcia: { ca: 41800, leads: 11, devis:  9, commandes: 3, pipeline: 68000,  marge: 0.54, masseSalariale: 7200,  impayes: 0,     affaires: 6,  piscines: 0, spas: 1, retards: 0, sav: 1, effectif: 1, sousTraitance: 0.42, heures: 180, respectDelais: 0.95 },
 };
 
-const CIBLES = {
+const CIBLES_DEFAUT = {
   caTotal: 250000, caSpa: 85000, caLuca: 120000, caValorcia: 60000, croissance: 0.08,
   margeBrute: 0.55, rex: 50000, masseSalariale: 35000, impayes: 0,
   piscinesMois: 2.5, spas: 5, retardsChantier: 0, sav: 5, occupation: 0.80, respectDelais: 0.90,
   effectif: 6, sousTraitance: 0.30,
   leads: 18, devis: 25, commandes: 10, conversion: 0.40, pipeline: 500000,
+};
+
+// Map clé KV → champ JS. Les pourcentages stockés en KV sont 0-100, on les convertit en 0-1.
+const CIBLE_KEYS = {
+  CIBLE_CA_TOTAL: { f: 'caTotal' }, CIBLE_CA_SPA: { f: 'caSpa' }, CIBLE_CA_LUCA: { f: 'caLuca' }, CIBLE_CA_VALORCIA: { f: 'caValorcia' },
+  CIBLE_CROISSANCE_MOM: { f: 'croissance', pct: true }, CIBLE_MARGE_BRUTE: { f: 'margeBrute', pct: true },
+  CIBLE_REX: { f: 'rex' }, CIBLE_MASSE_SALARIALE: { f: 'masseSalariale' },
+  CIBLE_PISCINES_MOIS: { f: 'piscinesMois' }, CIBLE_SPAS: { f: 'spas' },
+  CIBLE_OCCUPATION: { f: 'occupation', pct: true }, CIBLE_RESPECT_DELAIS: { f: 'respectDelais', pct: true },
+  CIBLE_EFFECTIF: { f: 'effectif' }, CIBLE_SOUS_TRAITANCE: { f: 'sousTraitance', pct: true },
+  CIBLE_LEADS: { f: 'leads' }, CIBLE_DEVIS: { f: 'devis' }, CIBLE_COMMANDES: { f: 'commandes' },
+  CIBLE_CONVERSION: { f: 'conversion', pct: true }, CIBLE_PIPELINE: { f: 'pipeline' },
 };
 
 // 12 derniers mois de CA (démo)
@@ -386,6 +398,21 @@ export default function KpiGroupe() {
   const [periode, setPeriode] = useState('mois');
   const [mois, setMois] = useState(() => new Date().toISOString().slice(0, 7));
   const [viewMode, setViewMode] = useState('cards');
+  const [cibles, setCibles] = useState(CIBLES_DEFAUT);
+  const [ciblesSource, setCiblesSource] = useState('defaut');
+
+  useEffect(() => {
+    fetch('/api/cibles')
+      .then(r => r.json())
+      .then(j => {
+        if (j?.ok && j.cibles) {
+          const merged = { ...CIBLES_DEFAUT, ...j.cibles };
+          setCibles(merged);
+          if (Object.keys(j.cibles).length > 0) setCiblesSource('kv');
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const totals = useMemo(() => {
     const sum = (k) => SOCIETES.reduce((s, soc) => s + KPI_DEMO[soc.id][k], 0);
@@ -423,7 +450,10 @@ export default function KpiGroupe() {
           <div style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', color: '#fff', borderRadius: 14, padding: '18px 22px', marginBottom: 14, boxShadow: '0 6px 20px rgba(15,23,42,.15)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 14 }}>
               <div>
-                <Link href="/" style={{ fontSize: 11, color: '#94a3b8', textDecoration: 'none' }}>← Dashboard</Link>
+                <div style={{ display: 'flex', gap: 14, fontSize: 11 }}>
+                  <Link href="/" style={{ color: '#94a3b8', textDecoration: 'none' }}>← Dashboard</Link>
+                  <Link href="/plan" style={{ color: '#c4b5fd', textDecoration: 'none', fontWeight: 700 }}>🧠 Plan de progression →</Link>
+                </div>
                 <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: -0.5, marginTop: 4 }}>📊 KPI Groupe — Command Center</div>
                 <div style={{ fontSize: 13, color: '#94a3b8', marginTop: 4 }}>
                   {SOCIETES.map((s, i) => <span key={s.id}>{i > 0 ? ' · ' : ''}{s.flag} {s.nom}</span>)}
@@ -454,6 +484,16 @@ export default function KpiGroupe() {
           </div>
 
           <ViewModeCtx.Provider value={viewMode}>
+          {/* Bandeau source des cibles */}
+          <div style={{ background: ciblesSource === 'kv' ? '#f0fdf4' : '#fffbeb', border: `1px solid ${ciblesSource === 'kv' ? '#86efac' : '#fcd34d'}`, borderRadius: 10, padding: '8px 14px', marginBottom: 12, fontSize: 12, color: ciblesSource === 'kv' ? '#166534' : '#78350f', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+            <span>
+              🎯 Cibles : {ciblesSource === 'kv' ? <strong>personnalisées (KV chiffré)</strong> : <strong>par défaut</strong>}
+              {ciblesSource !== 'kv' && ' — pour les modifier, va sur '}
+              {ciblesSource !== 'kv' && <Link href="/connectors" style={{ color: '#E67E22', fontWeight: 700 }}>🔌 Connecteurs → Cibles KPI éditables</Link>}
+            </span>
+            <Link href="/connectors" style={{ fontSize: 11, color: '#475569', textDecoration: 'underline' }}>Modifier les cibles ↗</Link>
+          </div>
+
           {/* Sous-onglets */}
           <div style={{ display: 'flex', gap: 4, background: '#fff', borderRadius: 12, padding: 4, marginBottom: 18, border: '1px solid #e8ecf0', overflowX: 'auto' }}>
             {SOUS_ONGLETS.map(s => (
@@ -479,20 +519,20 @@ export default function KpiGroupe() {
           {vue === 'groupe' && (
             <>
               <Section title="CA Groupe Consolidé" icon="💰" accent="#E67E22">
-                <KpiCard label="CA Total Groupe" value={totals.caTotal} target={CIBLES.caTotal} unit="€" source="Odoo" big />
-                <KpiCard label="CA 123SPA 🇫🇷" value={KPI_DEMO.spa.ca} target={CIBLES.caSpa} unit="€" source="Odoo" />
-                <KpiCard label="CA Luca 🇧🇪" value={KPI_DEMO.luca.ca} target={CIBLES.caLuca} unit="€" source="Odoo" />
-                <KpiCard label="CA Valorcia 🇱🇺" value={KPI_DEMO.valorcia.ca} target={CIBLES.caValorcia} unit="€" source="Odoo" />
-                <KpiCard label="Croissance MoM" value={0.072} target={CIBLES.croissance} unit="%" decimals={1} sub="vs mois précédent" source="Calcul" />
+                <KpiCard label="CA Total Groupe" value={totals.caTotal} target={cibles.caTotal} unit="€" source="Odoo" big />
+                <KpiCard label="CA 123SPA 🇫🇷" value={KPI_DEMO.spa.ca} target={cibles.caSpa} unit="€" source="Odoo" />
+                <KpiCard label="CA Luca 🇧🇪" value={KPI_DEMO.luca.ca} target={cibles.caLuca} unit="€" source="Odoo" />
+                <KpiCard label="CA Valorcia 🇱🇺" value={KPI_DEMO.valorcia.ca} target={cibles.caValorcia} unit="€" source="Odoo" />
+                <KpiCard label="Croissance MoM" value={0.072} target={cibles.croissance} unit="%" decimals={1} sub="vs mois précédent" source="Calcul" />
               </Section>
 
               <Section title="Synthèse opérationnelle" icon="⚡" accent="#3498DB">
-                <KpiCard label="Marge brute groupe" value={totals.margeBrute} target={CIBLES.margeBrute} unit="%" decimals={1} source="Odoo" />
-                <KpiCard label="REX estimé" value={totals.rex} target={CIBLES.rex} unit="€" source="Calcul" />
-                <KpiCard label="Effectif actif" value={totals.effectif} target={CIBLES.effectif} source="Planneo" />
-                <KpiCard label="Leads entrants" value={totals.leads} target={CIBLES.leads} source="Odoo CRM" />
+                <KpiCard label="Marge brute groupe" value={totals.margeBrute} target={cibles.margeBrute} unit="%" decimals={1} source="Odoo" />
+                <KpiCard label="REX estimé" value={totals.rex} target={cibles.rex} unit="€" source="Calcul" />
+                <KpiCard label="Effectif actif" value={totals.effectif} target={cibles.effectif} source="Planneo" />
+                <KpiCard label="Leads entrants" value={totals.leads} target={cibles.leads} source="Odoo CRM" />
                 <KpiCard label="Affaires en cours" value={totals.affaires} source="Planneo" />
-                <KpiCard label="Impayés groupe" value={totals.impayes} target={CIBLES.impayes} unit="€" inverse color={totals.impayes === 0 ? '#16a34a' : '#dc2626'} source="Odoo" />
+                <KpiCard label="Impayés groupe" value={totals.impayes} target={cibles.impayes} unit="€" inverse color={totals.impayes === 0 ? '#16a34a' : '#dc2626'} source="Odoo" />
               </Section>
 
               <HideInTable>
@@ -542,12 +582,12 @@ export default function KpiGroupe() {
           {vue === 'commercial' && (
             <>
               <Section title="Activité commerciale groupe" icon="🎯" accent="#dc2626">
-                <KpiCard label="Leads entrants" value={totals.leads} target={CIBLES.leads} sub="tous canaux" source="Odoo CRM" />
-                <KpiCard label="Devis envoyés" value={totals.devis} target={CIBLES.devis} source="Odoo Vente" />
-                <KpiCard label="Commandes signées" value={totals.commandes} target={CIBLES.commandes} source="Odoo Vente" />
-                <KpiCard label="Taux conversion" value={totals.conversion} target={CIBLES.conversion} unit="%" decimals={1} sub="devis → commandes" source="Calcul" />
+                <KpiCard label="Leads entrants" value={totals.leads} target={cibles.leads} sub="tous canaux" source="Odoo CRM" />
+                <KpiCard label="Devis envoyés" value={totals.devis} target={cibles.devis} source="Odoo Vente" />
+                <KpiCard label="Commandes signées" value={totals.commandes} target={cibles.commandes} source="Odoo Vente" />
+                <KpiCard label="Taux conversion" value={totals.conversion} target={cibles.conversion} unit="%" decimals={1} sub="devis → commandes" source="Calcul" />
                 <KpiCard label="Ticket moyen" value={totals.ticketMoyen} unit="€" sub="CA / commandes" source="Calcul" />
-                <KpiCard label="Pipeline commercial" value={totals.pipeline} target={CIBLES.pipeline} unit="€" source="Odoo CRM" />
+                <KpiCard label="Pipeline commercial" value={totals.pipeline} target={cibles.pipeline} unit="€" source="Odoo CRM" />
               </Section>
 
               <Section title="Performance par société" icon="🏢" accent="#6b3fa0">
@@ -635,13 +675,13 @@ export default function KpiGroupe() {
             <>
               <Section title="Trésorerie & encaissements" icon="💰" accent="#16a34a">
                 <KpiCard label="Encaissé ce mois" value={47200} unit="€" source="Odoo" big />
-                <KpiCard label="Impayés groupe" value={totals.impayes} target={CIBLES.impayes} unit="€" inverse color={totals.impayes === 0 ? '#16a34a' : '#dc2626'} source="Odoo" />
+                <KpiCard label="Impayés groupe" value={totals.impayes} target={cibles.impayes} unit="€" inverse color={totals.impayes === 0 ? '#16a34a' : '#dc2626'} source="Odoo" />
                 <KpiCard label="Trésorerie projetée" value={71799} unit="€" sub="fin S21 (Excel)" source="OneDrive" />
-                <KpiCard label="REX estimé" value={totals.rex} target={CIBLES.rex} unit="€" source="Calcul" />
+                <KpiCard label="REX estimé" value={totals.rex} target={cibles.rex} unit="€" source="Calcul" />
               </Section>
 
               <Section title="Marges & rentabilité" icon="📈" accent="#3498DB">
-                <KpiCard label="Marge brute groupe" value={totals.margeBrute} target={CIBLES.margeBrute} unit="%" decimals={1} source="Odoo" />
+                <KpiCard label="Marge brute groupe" value={totals.margeBrute} target={cibles.margeBrute} unit="%" decimals={1} source="Odoo" />
                 {SOCIETES.map(s => (
                   <KpiCard key={s.id} label={`Marge ${s.flag}`} value={KPI_DEMO[s.id].marge} target={0.50} unit="%" decimals={0} color={s.couleur} source="Odoo" />
                 ))}
@@ -649,8 +689,8 @@ export default function KpiGroupe() {
 
               <Section title="Production réalisée" icon="🏗️" accent="#0891b2">
                 <KpiCard label="Affaires en cours" value={totals.affaires} source="Planneo" />
-                <KpiCard label="Piscines livrées" value={totals.piscines} target={CIBLES.piscinesMois} sub="ce mois" source="Planneo" />
-                <KpiCard label="Spas installés" value={totals.spas} target={CIBLES.spas} source="Planneo" />
+                <KpiCard label="Piscines livrées" value={totals.piscines} target={cibles.piscinesMois} sub="ce mois" source="Planneo" />
+                <KpiCard label="Spas installés" value={totals.spas} target={cibles.spas} source="Planneo" />
               </Section>
 
               <LineChart
@@ -667,18 +707,18 @@ export default function KpiGroupe() {
             <>
               <Section title="Production & livraisons" icon="🏗️" accent="#16a34a">
                 <KpiCard label="Affaires en cours" value={totals.affaires} source="Planneo" big />
-                <KpiCard label="Piscines livrées" value={totals.piscines} target={CIBLES.piscinesMois} sub="ce mois" source="Planneo" />
-                <KpiCard label="Spas installés" value={totals.spas} target={CIBLES.spas} source="Planneo" />
-                <KpiCard label="Respect délais" value={totals.respectDelais} target={CIBLES.respectDelais} unit="%" decimals={0} source="Planneo" />
-                <KpiCard label="Retards > 2 sem." value={totals.retards} target={CIBLES.retardsChantier} inverse source="Planneo" color={totals.retards <= CIBLES.retardsChantier ? '#16a34a' : '#dc2626'} />
-                <KpiCard label="SAV ouverts" value={totals.sav} target={CIBLES.sav} inverse source="Planneo" />
+                <KpiCard label="Piscines livrées" value={totals.piscines} target={cibles.piscinesMois} sub="ce mois" source="Planneo" />
+                <KpiCard label="Spas installés" value={totals.spas} target={cibles.spas} source="Planneo" />
+                <KpiCard label="Respect délais" value={totals.respectDelais} target={cibles.respectDelais} unit="%" decimals={0} source="Planneo" />
+                <KpiCard label="Retards > 2 sem." value={totals.retards} target={cibles.retardsChantier} inverse source="Planneo" color={totals.retards <= cibles.retardsChantier ? '#16a34a' : '#dc2626'} />
+                <KpiCard label="SAV ouverts" value={totals.sav} target={cibles.sav} inverse source="Planneo" />
               </Section>
 
               <Section title="Charge & équipes" icon="⚙️" accent="#7c3aed">
-                <KpiCard label="Taux occupation" value={totals.occupation} target={CIBLES.occupation} unit="%" decimals={0} source="Planneo" />
-                <KpiCard label="Taux sous-traitance" value={totals.sousTraitance} target={CIBLES.sousTraitance} unit="%" decimals={0} inverse source="Planneo" />
+                <KpiCard label="Taux occupation" value={totals.occupation} target={cibles.occupation} unit="%" decimals={0} source="Planneo" />
+                <KpiCard label="Taux sous-traitance" value={totals.sousTraitance} target={cibles.sousTraitance} unit="%" decimals={0} inverse source="Planneo" />
                 <KpiCard label="Heures planifiées" value={totals.heures} unit="h" sub="ce mois" source="Planneo" />
-                <KpiCard label="Effectif total" value={totals.effectif} target={CIBLES.effectif} source="Planneo" />
+                <KpiCard label="Effectif total" value={totals.effectif} target={cibles.effectif} source="Planneo" />
               </Section>
 
               <HideInTable>
@@ -707,10 +747,10 @@ export default function KpiGroupe() {
           {vue === 'rh' && (
             <>
               <Section title="Effectif & main-d'œuvre" icon="👥" accent="#0891b2">
-                <KpiCard label="Effectif actif" value={totals.effectif} target={CIBLES.effectif} sub="FTE total" source="Planneo" big />
-                <KpiCard label="Taux sous-traitance" value={totals.sousTraitance} target={CIBLES.sousTraitance} unit="%" decimals={0} inverse source="Planneo" />
+                <KpiCard label="Effectif actif" value={totals.effectif} target={cibles.effectif} sub="FTE total" source="Planneo" big />
+                <KpiCard label="Taux sous-traitance" value={totals.sousTraitance} target={cibles.sousTraitance} unit="%" decimals={0} inverse source="Planneo" />
                 <KpiCard label="Heures planifiées" value={totals.heures} unit="h" sub="ce mois" source="Planneo" />
-                <KpiCard label="Masse salariale" value={totals.masseSalariale} target={CIBLES.masseSalariale} unit="€" inverse source="Paie" />
+                <KpiCard label="Masse salariale" value={totals.masseSalariale} target={cibles.masseSalariale} unit="€" inverse source="Paie" />
               </Section>
 
               <Section title="Productivité commerciale par effectif" icon="📈" accent="#dc2626">
