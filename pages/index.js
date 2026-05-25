@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import Head from "next/head";
 
 const data = {
@@ -345,6 +345,419 @@ function FunnelEtape({ etape, index, total }) {
   );
 }
 
+// ─── Module Frais Fixes : table éditable inline + graphique stacked ────────
+const MOIS_NOMS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+const CAT_COLORS = {
+  Compta: '#3b82f6', Comptable: '#1d4ed8', Loyer: '#dc2626', Banque: '#0891b2',
+  Assurance: '#7c3aed', Prêt: '#ea580c', Pub: '#f59e0b', Téléphone: '#0ea5e9',
+  Carburant: '#84cc16', Salaires: '#16a34a', Véhicule: '#475569', Frais: '#94a3b8',
+  TVA: '#be123c', Divers: '#a1a1aa',
+};
+const fmtEur = (v) => new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(Math.round(v)) + ' €';
+const fmtK = (v) => v >= 1000 ? `${(v/1000).toFixed(1)}k€` : `${Math.round(v)}€`;
+
+function FraisFixesModule() {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [societeId, setSocieteId] = useState('123spa');
+  const [edits, setEdits] = useState({}); // { "chargeId:moisIdx": value }
+  const [saving, setSaving] = useState(false);
+  const [savedAt, setSavedAt] = useState(null);
+  const [showAdd, setShowAdd] = useState(false);
+  const [addForm, setAddForm] = useState({ label: '', categorie: 'Divers' });
+
+  useEffect(() => {
+    fetch('/api/frais-fixes').then(r => r.json()).then(j => {
+      if (j.ok) setData(j.data);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div style={{ background: '#fff', border: '1px solid #e8ecf0', borderRadius: 12, padding: 30, textAlign: 'center', color: '#94a3b8', marginBottom: 20 }}>Chargement des frais fixes…</div>;
+  if (!data) return <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 12, padding: 16, color: '#991b1b', marginBottom: 20, fontSize: 13 }}>Impossible de charger les frais fixes.</div>;
+
+  const societes = Object.values(data.societes);
+  const soc = data.societes[societeId];
+  if (!soc) return null;
+
+  function effective(chargeId, mois) {
+    const key = `${chargeId}:${mois}`;
+    if (edits[key] !== undefined) return parseFloat(edits[key]) || 0;
+    const c = soc.charges.find(x => x.id === chargeId);
+    return c?.mois[mois] || 0;
+  }
+
+  async function saveAll() {
+    setSaving(true);
+    const newData = JSON.parse(JSON.stringify(data));
+    for (const [key, val] of Object.entries(edits)) {
+      const [cid, mi] = key.split(':');
+      const c = newData.societes[societeId].charges.find(x => x.id === cid);
+      if (c) c.mois[parseInt(mi)] = parseFloat(val) || 0;
+    }
+    const r = await fetch('/api/frais-fixes', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newData) });
+    const j = await r.json();
+    if (j.ok) {
+      setData(newData);
+      setEdits({});
+      setSavedAt(new Date());
+    } else {
+      alert(j.error || 'Erreur enregistrement');
+    }
+    setSaving(false);
+  }
+
+  async function addCharge() {
+    if (!addForm.label.trim()) return;
+    const charge = { id: `c-${Date.now()}`, label: addForm.label.trim().toUpperCase(), categorie: addForm.categorie, mois: Array(12).fill(0) };
+    const r = await fetch('/api/frais-fixes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'addCharge', societeId, charge }) });
+    const j = await r.json();
+    if (j.ok) { setData(j.data); setShowAdd(false); setAddForm({ label: '', categorie: 'Divers' }); }
+  }
+
+  async function deleteCharge(chargeId) {
+    if (!confirm('Supprimer cette charge ?')) return;
+    const r = await fetch('/api/frais-fixes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'deleteCharge', societeId, chargeId }) });
+    const j = await r.json();
+    if (j.ok) setData(j.data);
+  }
+
+  // Agrégations
+  const totalsParMois = MOIS_NOMS.map((_, i) => soc.charges.reduce((s, c) => s + effective(c.id, i), 0));
+  const totalAnnuel = totalsParMois.reduce((s, v) => s + v, 0);
+
+  // Group par catégorie pour affichage et pour graphe
+  const parCat = {};
+  for (const c of soc.charges) {
+    if (!parCat[c.categorie]) parCat[c.categorie] = [];
+    parCat[c.categorie].push(c);
+  }
+  const totalsCatParMois = Object.entries(parCat).map(([cat, charges]) => ({
+    categorie: cat,
+    couleur: CAT_COLORS[cat] || '#94a3b8',
+    mois: MOIS_NOMS.map((_, i) => charges.reduce((s, c) => s + effective(c.id, i), 0)),
+  }));
+  totalsCatParMois.sort((a, b) => b.mois.reduce((s,v)=>s+v,0) - a.mois.reduce((s,v)=>s+v,0));
+
+  // Totaux groupe consolidé
+  const totalGroupeParMois = MOIS_NOMS.map((_, i) =>
+    societes.reduce((s, so) => s + so.charges.reduce((ss, c) => ss + (so.id === societeId ? effective(c.id, i) : c.mois[i] || 0), 0), 0)
+  );
+
+  return (
+    <div style={{ background: '#fff', border: '1px solid #e8ecf0', borderRadius: 14, padding: 0, marginBottom: 20, overflow: 'hidden' }}>
+      {/* Header */}
+      <div style={{ background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)', color: '#fff', padding: '16px 22px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: -0.3 }}>📊 Frais fixes {data.annee} — édition inline</div>
+          <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>Source : TABLEAU_FRAIS_FIXE_{data.annee}.xlsx · MAJ {data.mis_a_jour}</div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          {Object.keys(edits).length > 0 && (
+            <span style={{ fontSize: 11, color: '#fcd34d', fontWeight: 700 }}>● {Object.keys(edits).length} modification{Object.keys(edits).length > 1 ? 's' : ''} en attente</span>
+          )}
+          {savedAt && Object.keys(edits).length === 0 && (
+            <span style={{ fontSize: 11, color: '#86efac', fontWeight: 600 }}>✓ Sauvé {savedAt.toLocaleTimeString()}</span>
+          )}
+          <button onClick={() => setEdits({})} disabled={Object.keys(edits).length === 0} style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid #475569', background: 'transparent', color: '#cbd5e1', fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: Object.keys(edits).length === 0 ? 0.4 : 1 }}>Annuler</button>
+          <button onClick={saveAll} disabled={Object.keys(edits).length === 0 || saving} style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: '#E67E22', color: '#fff', fontSize: 12, fontWeight: 700, cursor: Object.keys(edits).length > 0 && !saving ? 'pointer' : 'not-allowed', opacity: Object.keys(edits).length > 0 ? 1 : 0.5 }}>{saving ? 'Enregistrement…' : '💾 Enregistrer'}</button>
+        </div>
+      </div>
+
+      {/* Tabs sociétés */}
+      <div style={{ display: 'flex', borderBottom: '1px solid #e8ecf0', background: '#f8fafc' }}>
+        {societes.map(s => {
+          const tot = s.charges.reduce((sum, c) => sum + c.mois.reduce((ss, v) => ss + v, 0), 0);
+          const active = s.id === societeId;
+          return (
+            <button key={s.id} onClick={() => setSocieteId(s.id)}
+              style={{ flex: 1, padding: '12px 16px', border: 'none', borderBottom: active ? `3px solid ${s.couleur}` : '3px solid transparent', background: active ? '#fff' : 'transparent', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 18 }}>{s.flag}</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 800, fontSize: 13, color: '#1e293b' }}>{s.nom}</div>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>{fmtEur(tot)}/an · {s.charges.length} charges</div>
+                </div>
+              </div>
+            </button>
+          );
+        })}
+        <button onClick={() => setSocieteId('__groupe__')}
+          style={{ flex: 1, padding: '12px 16px', border: 'none', borderBottom: societeId === '__groupe__' ? '3px solid #6b3fa0' : '3px solid transparent', background: societeId === '__groupe__' ? '#fff' : 'transparent', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 18 }}>🌐</span>
+            <div>
+              <div style={{ fontWeight: 800, fontSize: 13, color: '#1e293b' }}>Groupe consolidé</div>
+              <div style={{ fontSize: 11, color: '#64748b' }}>Vue agrégée</div>
+            </div>
+          </div>
+        </button>
+      </div>
+
+      {/* Graphique stacked par catégorie + courbe groupe */}
+      <div style={{ padding: 16, borderBottom: '1px solid #e8ecf0', background: '#fafbfc' }}>
+        {societeId === '__groupe__' ? (
+          <FraisGroupeChart societes={societes} />
+        ) : (
+          <FraisStackedChart cats={totalsCatParMois} mois={MOIS_NOMS} totalsParMois={totalsParMois} totalGroupeParMois={totalGroupeParMois} />
+        )}
+      </div>
+
+      {societeId !== '__groupe__' ? (
+        <>
+          {/* Table éditable */}
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
+              <thead>
+                <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e8ecf0' }}>
+                  <th style={{ padding: '10px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, position: 'sticky', left: 0, background: '#f8fafc', minWidth: 180 }}>Charge</th>
+                  <th style={{ padding: '10px 8px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 }}>Catégorie</th>
+                  {MOIS_NOMS.map((m, i) => (
+                    <th key={i} style={{ padding: '10px 6px', textAlign: 'right', fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, minWidth: 70 }}>{m}</th>
+                  ))}
+                  <th style={{ padding: '10px 12px', textAlign: 'right', fontSize: 10, fontWeight: 700, color: '#1e293b', textTransform: 'uppercase', letterSpacing: 0.5, background: '#fffbeb', minWidth: 90 }}>Total an</th>
+                  <th style={{ width: 32 }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(parCat).map(([cat, charges]) => {
+                  const catColor = CAT_COLORS[cat] || '#94a3b8';
+                  return (
+                    <React.Fragment key={cat}>
+                      <tr style={{ background: `${catColor}10` }}>
+                        <td colSpan={15} style={{ padding: '6px 12px', borderLeft: `4px solid ${catColor}`, fontSize: 11, fontWeight: 700, color: catColor, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                          {cat} · {charges.length} charge{charges.length > 1 ? 's' : ''} · {fmtEur(charges.reduce((s, c) => s + c.mois.reduce((ss, v) => ss + v, 0), 0))}/an
+                        </td>
+                      </tr>
+                      {charges.map(c => {
+                        const totLigne = MOIS_NOMS.reduce((s, _, i) => s + effective(c.id, i), 0);
+                        return (
+                          <tr key={c.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                            <td style={{ padding: '6px 12px', position: 'sticky', left: 0, background: '#fff', fontWeight: 600, color: '#1e293b', borderLeft: `3px solid ${catColor}` }}>{c.label}</td>
+                            <td style={{ padding: '6px 8px', color: catColor, fontSize: 11, fontWeight: 600 }}>{c.categorie}</td>
+                            {MOIS_NOMS.map((_, i) => {
+                              const v = effective(c.id, i);
+                              const isEdit = edits[`${c.id}:${i}`] !== undefined;
+                              return (
+                                <td key={i} style={{ padding: '2px 2px', textAlign: 'right' }}>
+                                  <input
+                                    type="number"
+                                    value={isEdit ? edits[`${c.id}:${i}`] : (v || '')}
+                                    onChange={(e) => setEdits({ ...edits, [`${c.id}:${i}`]: e.target.value })}
+                                    style={{
+                                      width: '100%', padding: '4px 6px', border: isEdit ? '1px solid #E67E22' : '1px solid transparent',
+                                      background: isEdit ? '#fff7ed' : 'transparent', borderRadius: 4, textAlign: 'right',
+                                      fontSize: 12, color: v > 0 ? '#1e293b' : '#cbd5e1', fontFamily: 'inherit', fontVariantNumeric: 'tabular-nums',
+                                      outline: 'none', boxSizing: 'border-box',
+                                    }}
+                                    onFocus={(e) => { e.target.style.borderColor = '#E67E22'; e.target.style.background = '#fff7ed'; }}
+                                    onBlur={(e) => { if (!isEdit) { e.target.style.borderColor = 'transparent'; e.target.style.background = 'transparent'; } }}
+                                  />
+                                </td>
+                              );
+                            })}
+                            <td style={{ padding: '6px 12px', textAlign: 'right', fontWeight: 700, color: '#1e293b', background: '#fffbeb' }}>{totLigne > 0 ? fmtEur(totLigne) : '—'}</td>
+                            <td style={{ padding: '4px', textAlign: 'center' }}>
+                              <button onClick={() => deleteCharge(c.id)} title="Supprimer" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#cbd5e1', fontSize: 14 }}>🗑</button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </React.Fragment>
+                  );
+                })}
+                <tr style={{ background: '#1e293b', color: '#fff' }}>
+                  <td colSpan={2} style={{ padding: '10px 12px', fontWeight: 800, fontSize: 13 }}>TOTAL {soc.nom}</td>
+                  {totalsParMois.map((v, i) => (
+                    <td key={i} style={{ padding: '10px 6px', textAlign: 'right', fontWeight: 700, fontSize: 11 }}>{fmtK(v)}</td>
+                  ))}
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 800, color: '#fcd34d', background: '#0f172a' }}>{fmtEur(totalAnnuel)}</td>
+                  <td></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {/* Ajouter une charge */}
+          <div style={{ padding: '12px 16px', borderTop: '1px solid #e8ecf0', background: '#f8fafc', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            {!showAdd ? (
+              <button onClick={() => setShowAdd(true)} style={{ padding: '8px 16px', borderRadius: 8, border: '1px dashed #cbd5e1', background: '#fff', color: '#475569', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>+ Ajouter une charge à {soc.nom}</button>
+            ) : (
+              <>
+                <input value={addForm.label} onChange={e => setAddForm({ ...addForm, label: e.target.value })} placeholder="Nom de la charge" autoFocus style={{ padding: '6px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 12, fontFamily: 'inherit', flex: 1, minWidth: 200 }} />
+                <select value={addForm.categorie} onChange={e => setAddForm({ ...addForm, categorie: e.target.value })} style={{ padding: '6px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 12, fontFamily: 'inherit' }}>
+                  {Object.keys(CAT_COLORS).map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <button onClick={addCharge} style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: '#16a34a', color: '#fff', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>Ajouter</button>
+                <button onClick={() => setShowAdd(false)} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #cbd5e1', background: '#fff', color: '#64748b', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>Annuler</button>
+              </>
+            )}
+          </div>
+        </>
+      ) : (
+        // Vue groupe consolidé : table croisée société × mois
+        <div style={{ padding: 16 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
+            <thead>
+              <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e8ecf0' }}>
+                <th style={{ padding: '10px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Société</th>
+                {MOIS_NOMS.map(m => <th key={m} style={{ padding: '10px 6px', textAlign: 'right', fontSize: 10, fontWeight: 700, color: '#64748b' }}>{m}</th>)}
+                <th style={{ padding: '10px 12px', textAlign: 'right', fontSize: 10, fontWeight: 700, color: '#1e293b', background: '#fffbeb' }}>Total an</th>
+              </tr>
+            </thead>
+            <tbody>
+              {societes.map(s => {
+                const tots = MOIS_NOMS.map((_, i) => s.charges.reduce((sum, c) => sum + (c.mois[i] || 0), 0));
+                const an = tots.reduce((sum, v) => sum + v, 0);
+                return (
+                  <tr key={s.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '10px 12px', borderLeft: `4px solid ${s.couleur}`, fontWeight: 700 }}>{s.flag} {s.nom}</td>
+                    {tots.map((v, i) => <td key={i} style={{ padding: '10px 6px', textAlign: 'right', color: '#1e293b' }}>{fmtK(v)}</td>)}
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, background: '#fffbeb' }}>{fmtEur(an)}</td>
+                  </tr>
+                );
+              })}
+              <tr style={{ background: '#1e293b', color: '#fff' }}>
+                <td style={{ padding: '12px', fontWeight: 800 }}>🌐 TOTAL GROUPE</td>
+                {MOIS_NOMS.map((_, i) => {
+                  const tot = societes.reduce((s, so) => s + so.charges.reduce((ss, c) => ss + (c.mois[i] || 0), 0), 0);
+                  return <td key={i} style={{ padding: '12px 6px', textAlign: 'right', fontWeight: 700 }}>{fmtK(tot)}</td>;
+                })}
+                <td style={{ padding: '12px', textAlign: 'right', fontWeight: 800, color: '#fcd34d', background: '#0f172a' }}>{fmtEur(societes.reduce((s, so) => s + so.charges.reduce((ss, c) => ss + c.mois.reduce((sss, v) => sss + v, 0), 0), 0))}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FraisStackedChart({ cats, mois, totalsParMois, totalGroupeParMois }) {
+  const W = Math.max(700, mois.length * 70), H = 280;
+  const padding = { top: 20, right: 50, bottom: 30, left: 60 };
+  const innerW = W - padding.left - padding.right;
+  const innerH = H - padding.top - padding.bottom;
+  const max = Math.max(...totalsParMois, ...totalGroupeParMois, 1);
+  const barW = innerW / mois.length * 0.62;
+  const gap = innerW / mois.length * 0.38;
+  return (
+    <div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Mensualisation des frais fixes — barres empilées par catégorie + courbe groupe</div>
+      <div style={{ overflowX: 'auto' }}>
+        <svg width={W} height={H}>
+          {[0, 0.25, 0.5, 0.75, 1].map((p, i) => {
+            const y = padding.top + innerH * (1 - p);
+            return (
+              <g key={i}>
+                <line x1={padding.left} x2={padding.left + innerW} y1={y} y2={y} stroke="#f1f5f9" />
+                <text x={padding.left - 8} y={y + 3} fontSize="10" fill="#94a3b8" textAnchor="end">{fmtK(max * p)}</text>
+              </g>
+            );
+          })}
+          {mois.map((m, i) => {
+            const x = padding.left + gap / 2 + i * (barW + gap);
+            let yCursor = padding.top + innerH;
+            return (
+              <g key={i}>
+                {cats.map((cat, j) => {
+                  const v = cat.mois[i];
+                  if (v <= 0) return null;
+                  const h = (v / max) * innerH;
+                  yCursor -= h;
+                  return <rect key={j} x={x} y={yCursor} width={barW} height={h} fill={cat.couleur}><title>{cat.categorie} {m} : {fmtEur(v)}</title></rect>;
+                })}
+                <text x={x + barW / 2} y={H - 10} fontSize="10" fill="#64748b" textAnchor="middle" fontWeight="600">{m}</text>
+                <text x={x + barW / 2} y={padding.top + innerH - (totalsParMois[i] / max) * innerH - 4} fontSize="9" fill="#1e293b" textAnchor="middle" fontWeight="700">{fmtK(totalsParMois[i])}</text>
+              </g>
+            );
+          })}
+          {/* Courbe total groupe */}
+          <polyline
+            points={mois.map((_, i) => `${padding.left + gap / 2 + i * (barW + gap) + barW / 2},${padding.top + innerH * (1 - totalGroupeParMois[i] / max)}`).join(' ')}
+            fill="none" stroke="#1e293b" strokeWidth="2.5" strokeDasharray="4 4"
+          />
+          {mois.map((_, i) => (
+            <circle key={`d-${i}`} cx={padding.left + gap / 2 + i * (barW + gap) + barW / 2} cy={padding.top + innerH * (1 - totalGroupeParMois[i] / max)} r="3" fill="#1e293b">
+              <title>Total groupe {mois[i]} : {fmtEur(totalGroupeParMois[i])}</title>
+            </circle>
+          ))}
+        </svg>
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 8 }}>
+        {cats.map((c, i) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11 }}>
+            <div style={{ width: 12, height: 12, borderRadius: 3, background: c.couleur }} />
+            <span style={{ color: '#475569', fontWeight: 600 }}>{c.categorie}</span>
+            <span style={{ color: '#94a3b8' }}>{fmtK(c.mois.reduce((s, v) => s + v, 0))}/an</span>
+          </div>
+        ))}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, marginLeft: 'auto' }}>
+          <div style={{ width: 16, height: 2, background: '#1e293b' }} />
+          <span style={{ color: '#475569', fontWeight: 600 }}>Total Groupe (3 sociétés)</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FraisGroupeChart({ societes }) {
+  const W = Math.max(700, 12 * 70), H = 280;
+  const padding = { top: 20, right: 50, bottom: 30, left: 60 };
+  const innerW = W - padding.left - padding.right;
+  const innerH = H - padding.top - padding.bottom;
+  const totals = MOIS_NOMS.map((_, i) =>
+    societes.map(s => ({ id: s.id, nom: s.nom, couleur: s.couleur, v: s.charges.reduce((sum, c) => sum + (c.mois[i] || 0), 0) }))
+  );
+  const max = Math.max(...totals.map(arr => arr.reduce((s, x) => s + x.v, 0)), 1);
+  const barW = innerW / MOIS_NOMS.length * 0.62;
+  const gap = innerW / MOIS_NOMS.length * 0.38;
+  return (
+    <div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Frais fixes mensuels par société — vue consolidée groupe</div>
+      <div style={{ overflowX: 'auto' }}>
+        <svg width={W} height={H}>
+          {[0, 0.25, 0.5, 0.75, 1].map((p, i) => {
+            const y = padding.top + innerH * (1 - p);
+            return (
+              <g key={i}>
+                <line x1={padding.left} x2={padding.left + innerW} y1={y} y2={y} stroke="#f1f5f9" />
+                <text x={padding.left - 8} y={y + 3} fontSize="10" fill="#94a3b8" textAnchor="end">{fmtK(max * p)}</text>
+              </g>
+            );
+          })}
+          {MOIS_NOMS.map((m, i) => {
+            const x = padding.left + gap / 2 + i * (barW + gap);
+            let yCursor = padding.top + innerH;
+            const totMois = totals[i].reduce((s, x) => s + x.v, 0);
+            return (
+              <g key={i}>
+                {totals[i].map((s, j) => {
+                  if (s.v <= 0) return null;
+                  const h = (s.v / max) * innerH;
+                  yCursor -= h;
+                  return <rect key={j} x={x} y={yCursor} width={barW} height={h} fill={s.couleur}><title>{s.nom} {m} : {fmtEur(s.v)}</title></rect>;
+                })}
+                <text x={x + barW / 2} y={H - 10} fontSize="10" fill="#64748b" textAnchor="middle" fontWeight="600">{m}</text>
+                <text x={x + barW / 2} y={padding.top + innerH - (totMois / max) * innerH - 4} fontSize="9" fill="#1e293b" textAnchor="middle" fontWeight="700">{fmtK(totMois)}</text>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+      <div style={{ display: 'flex', gap: 14, marginTop: 8, flexWrap: 'wrap' }}>
+        {societes.map(s => (
+          <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11 }}>
+            <div style={{ width: 14, height: 14, borderRadius: 3, background: s.couleur }} />
+            <span style={{ color: '#475569', fontWeight: 600 }}>{s.flag} {s.nom}</span>
+            <span style={{ color: '#94a3b8' }}>{fmtK(s.charges.reduce((sum, c) => sum + c.mois.reduce((ss, v) => ss + v, 0), 0))}/an</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function KpiCard({ label, value, sub, alert, color }) {
   return (
     <div style={{ background: "#fff", border: alert ? "1.5px solid #fca5a5" : "1px solid #e8ecf0", borderRadius: 12, padding: "16px 18px", display: "flex", flexDirection: "column", gap: 4 }}>
@@ -661,6 +1074,9 @@ export default function Dashboard() {
                   />
                 ))}
               </div>
+
+              {/* ─ Frais fixes : table éditable + graphe ─ */}
+              <FraisFixesModule />
 
               {/* ─ Graphique entrées / sorties hebdomadaire ─ */}
               {(() => {
