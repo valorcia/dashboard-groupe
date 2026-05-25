@@ -84,12 +84,22 @@ function lineage(plan, id) {
 // Pan : drag avec la souris ou le doigt sur un espace vide.
 // Zoom : molette (ou pinch) + boutons + / - / reset.
 // Boutons + sur chaque noeud → ajout rapide d'une tâche enfant.
-function Mindmap({ plan, onSelect, selectedId, expandedIds, toggleExpanded, onAddChild, onEdit }) {
+function Mindmap({ plan, onSelect, selectedId, expandedIds, toggleExpanded, onAddChild, onEdit, onMoveNode }) {
   const svgRef = useRef(null);
   const [transform, setTransform] = useState({ x: 0, y: 0, k: 1 });
   const [dragging, setDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0, tx: 0, ty: 0 });
   const [hoverId, setHoverId] = useState(null);
+  // Drag d'un noeud individuel : { id, startX, startY, baseX, baseY }
+  const [nodeDrag, setNodeDrag] = useState(null);
+  // Positions custom des noeuds (id → {x, y}) — vient du plan, modifié au drop
+  const customPositions = useMemo(() => {
+    const map = {};
+    for (const n of plan.noeuds) {
+      if (n.x != null && n.y != null) map[n.id] = { x: n.x, y: n.y };
+    }
+    return map;
+  }, [plan.noeuds]);
 
   // ─ Layout récursif (mêmes calculs qu'avant, mais on stocke aussi le noeud entier)
   const cx = 0, cy = 0; // espace logique infini centré sur (0,0)
@@ -108,8 +118,10 @@ function Mindmap({ plan, onSelect, selectedId, expandedIds, toggleExpanded, onAd
     children.forEach((c, i) => {
       const t = children.length === 1 ? 0.5 : i / (children.length - 1);
       const angle = baseAngle - arcWidth / 2 + t * arcWidth;
-      const x = px + Math.cos(angle) * radius;
-      const y = py + Math.sin(angle) * radius;
+      const auto_x = px + Math.cos(angle) * radius;
+      const auto_y = py + Math.sin(angle) * radius;
+      const pos = customPositions[c.id] || { x: auto_x, y: auto_y };
+      const x = pos.x, y = pos.y;
       const childArcWidth = depth === 1 ? Math.PI / 2.5 : Math.PI / 3.2;
       const nbGrandChildren = childrenOf(plan, c.id).length;
       elements.push({
@@ -121,26 +133,33 @@ function Mindmap({ plan, onSelect, selectedId, expandedIds, toggleExpanded, onAd
         nbChildren: nbGrandChildren,
         isCategory: isCategory(c),
         angle,
+        custom: !!customPositions[c.id],
       });
-      lignes.push({ x1: px, y1: py, x2: x, y2: y, color: c.couleur || '#cbd5e1' });
-      layoutChildren(c.id, x, y, angle, childArcWidth, depth + 1);
+      const parentEl = elements.find(e => e.id === parentId);
+      const fromX = parentEl ? parentEl.x : px;
+      const fromY = parentEl ? parentEl.y : py;
+      lignes.push({ x1: fromX, y1: fromY, x2: x, y2: y, color: c.couleur || '#cbd5e1' });
+      layoutChildren(c.id, auto_x, auto_y, angle, childArcWidth, depth + 1);
     });
   }
 
   const axes = childrenOf(plan, 'racine');
   axes.forEach((axe, i) => {
     const angle = (-Math.PI / 2) + (i / Math.max(axes.length, 1)) * Math.PI * 2;
-    const x = cx + Math.cos(angle) * 280;
-    const y = cy + Math.sin(angle) * 280;
+    const auto_x = cx + Math.cos(angle) * 280;
+    const auto_y = cy + Math.sin(angle) * 280;
+    const pos = customPositions[axe.id] || { x: auto_x, y: auto_y };
+    const x = pos.x, y = pos.y;
     const nbChildren = childrenOf(plan, axe.id).length;
     elements.push({
       id: axe.id, x, y, w: 210, h: 66,
       label: `${axe.icone || ''} ${axe.label}`,
       color: axe.couleur || '#64748b',
       depth: 1, node: axe, hasChildren: nbChildren > 0, nbChildren, isCategory: isCategory(axe), angle,
+      custom: !!customPositions[axe.id],
     });
     lignes.push({ x1: cx, y1: cy, x2: x, y2: y, color: axe.couleur });
-    layoutChildren(axe.id, x, y, angle, Math.PI / 2.5, 2);
+    layoutChildren(axe.id, auto_x, auto_y, angle, Math.PI / 2.5, 2);
   });
 
   // ─ Auto-fit au premier rendu ou quand la map change
@@ -161,15 +180,51 @@ function Mindmap({ plan, onSelect, selectedId, expandedIds, toggleExpanded, onAd
   }, [plan.noeuds.length, expandedIds.size]);
 
   function onMouseDown(e) {
-    if (e.target.closest('[data-node]')) return;
+    if (e.target.closest('[data-action-btn]')) return;
+    const nodeEl = e.target.closest('[data-node-id]');
+    if (nodeEl && nodeEl.dataset.nodeId !== 'racine') {
+      // Drag du noeud
+      const id = nodeEl.dataset.nodeId;
+      const el = elements.find(x => x.id === id);
+      if (!el) return;
+      setNodeDrag({ id, startMouseX: e.clientX, startMouseY: e.clientY, baseX: el.x, baseY: el.y, moved: false });
+      e.preventDefault();
+      return;
+    }
     setDragging(true);
     setDragStart({ x: e.clientX, y: e.clientY, tx: transform.x, ty: transform.y });
   }
   function onMouseMove(e) {
+    if (nodeDrag) {
+      const dx = (e.clientX - nodeDrag.startMouseX) / transform.k;
+      const dy = (e.clientY - nodeDrag.startMouseY) / transform.k;
+      if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
+        // Modification optimiste : on bouge le noeud localement
+        if (!nodeDrag.moved) setNodeDrag({ ...nodeDrag, moved: true });
+        onMoveNode(nodeDrag.id, nodeDrag.baseX + dx, nodeDrag.baseY + dy, false);
+      }
+      return;
+    }
     if (!dragging) return;
     setTransform(t => ({ ...t, x: dragStart.tx + (e.clientX - dragStart.x), y: dragStart.ty + (e.clientY - dragStart.y) }));
   }
-  function onMouseUp() { setDragging(false); }
+  function onMouseUp(e) {
+    if (nodeDrag) {
+      if (nodeDrag.moved) {
+        // Drop → on persiste la position en KV
+        const el = elements.find(x => x.id === nodeDrag.id);
+        if (el) onMoveNode(nodeDrag.id, el.x, el.y, true);
+      } else {
+        // Click pur sans déplacement → sélection + expand
+        const el = elements.find(x => x.id === nodeDrag.id);
+        if (el && el.hasChildren) toggleExpanded(el.id);
+        onSelect(nodeDrag.id);
+      }
+      setNodeDrag(null);
+      return;
+    }
+    setDragging(false);
+  }
   function onWheel(e) {
     e.preventDefault();
     const rect = svgRef.current.getBoundingClientRect();
@@ -245,18 +300,23 @@ function Mindmap({ plan, onSelect, selectedId, expandedIds, toggleExpanded, onAd
               const isHover = hoverId === el.id;
               const adv = el.node && (isCategory(el.node) ? avancementCategorie(plan, el.id) : el.node.avancement);
               return (
-                <g key={el.id} data-node="true"
+                <g key={el.id} data-node-id={el.id}
                    onMouseEnter={() => setHoverId(el.id)}
                    onMouseLeave={() => setHoverId(null)}
-                   style={{ cursor: 'pointer' }}>
+                   style={{ cursor: nodeDrag?.id === el.id ? 'grabbing' : (isRoot ? 'pointer' : 'grab') }}>
                   <rect x={el.x - el.w / 2} y={el.y - el.h / 2} width={el.w} height={el.h}
                     rx={isRoot ? 14 : el.isCategory ? 10 : 8}
                     fill={isRoot ? el.color : el.isCategory ? `${el.color}15` : '#fff'}
                     stroke={el.color}
                     strokeWidth={isSel ? 3 : isRoot ? 0 : el.isCategory ? 2 : 1.5}
+                    strokeDasharray={el.custom ? '0' : undefined}
                     filter={isHover ? 'url(#nodeShadow)' : undefined}
-                    onClick={(e) => { e.stopPropagation(); if (el.hasChildren) toggleExpanded(el.id); onSelect(el.id); }}
                   />
+                  {el.custom && (
+                    <circle cx={el.x - el.w / 2 + 6} cy={el.y - el.h / 2 + 6} r={4} fill="#16a34a" stroke="#fff" strokeWidth="1.5">
+                      <title>Position personnalisée</title>
+                    </circle>
+                  )}
                   <text x={el.x} y={el.y + 4} textAnchor="middle"
                     fontSize={isRoot ? 14 : el.depth === 1 ? 12 : el.depth === 2 ? 11 : 10}
                     fontWeight={isRoot ? 800 : el.isCategory ? 700 : 600}
@@ -278,18 +338,25 @@ function Mindmap({ plan, onSelect, selectedId, expandedIds, toggleExpanded, onAd
                     </g>
                   )}
                   {/* Boutons d'action au hover */}
-                  {(isHover || isSel) && (
+                  {(isHover || isSel) && !nodeDrag && (
                     <g>
-                      {/* Bouton + (ajouter enfant) */}
-                      <g onClick={(e) => { e.stopPropagation(); onAddChild(el.id); }} style={{ cursor: 'pointer' }}>
+                      <g data-action-btn="true" onClick={(e) => { e.stopPropagation(); onAddChild(el.id); }} style={{ cursor: 'pointer' }}>
                         <circle cx={el.x + el.w / 2 + 14} cy={el.y} r={11} fill="#16a34a" stroke="#fff" strokeWidth="2" />
                         <text x={el.x + el.w / 2 + 14} y={el.y + 4} textAnchor="middle" fontSize="14" fill="#fff" fontWeight="800" pointerEvents="none">+</text>
                       </g>
-                      {/* Bouton ✏ (éditer) — seulement si pas la racine */}
                       {!isRoot && (
-                        <g onClick={(e) => { e.stopPropagation(); onEdit(el.id); }} style={{ cursor: 'pointer' }}>
+                        <g data-action-btn="true" onClick={(e) => { e.stopPropagation(); onEdit(el.id); }} style={{ cursor: 'pointer' }}>
                           <circle cx={el.x - el.w / 2 - 14} cy={el.y} r={11} fill="#3b82f6" stroke="#fff" strokeWidth="2" />
                           <text x={el.x - el.w / 2 - 14} y={el.y + 4} textAnchor="middle" fontSize="11" fill="#fff" pointerEvents="none">✎</text>
+                        </g>
+                      )}
+                      {/* Bouton de reset position (si custom) */}
+                      {el.custom && (
+                        <g data-action-btn="true" onClick={(e) => { e.stopPropagation(); onMoveNode(el.id, null, null, true); }} style={{ cursor: 'pointer' }}>
+                          <circle cx={el.x + el.w / 2 + 14} cy={el.y - 26} r={9} fill="#64748b" stroke="#fff" strokeWidth="1.5">
+                            <title>Reset position auto</title>
+                          </circle>
+                          <text x={el.x + el.w / 2 + 14} y={el.y - 23} textAnchor="middle" fontSize="9" fill="#fff" pointerEvents="none">↺</text>
                         </g>
                       )}
                     </g>
@@ -334,40 +401,12 @@ const mapBtn = { width: 30, height: 30, borderRadius: 6, border: 'none', backgro
 
 const btnSmall = { padding: '4px 10px', borderRadius: 6, border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer', fontWeight: 600, fontFamily: 'inherit' };
 
-// ─── Table arborescente (catégories, sous-catégories, tâches en arbre) ─────
+// ─── Table arborescente : affiche TOUS les niveaux (cat + sous-cat + tâches) ─
 function TableGroupee({ plan, filter, onSelect, selected, onAddChild }) {
   function passes(n) {
     if (filter.statut !== 'all' && n.statut !== filter.statut) return false;
     if (filter.priorite !== 'all' && n.priorite !== filter.priorite) return false;
     return true;
-  }
-
-  // On construit la liste plate des lignes en respectant la hiérarchie.
-  // Chaque entrée porte sa profondeur pour l'indentation.
-  const rows = [];
-  function walk(parentId, depth, ancestorIds) {
-    const enfants = childrenOf(plan, parentId);
-    for (const c of enfants) {
-      const nextAncestors = [...ancestorIds, c.id];
-      if (isCategory(c)) {
-        // On collecte d'abord les descendants pour savoir si la catégorie a
-        // au moins un descendant qui passe les filtres (sinon on la masque).
-        const before = rows.length;
-        walk(c.id, depth + 1, nextAncestors);
-        const after = rows.length;
-        if (after > before) {
-          // Insère le header au-dessus des lignes ajoutées
-          const enfantsDirects = childrenOf(plan, c.id);
-          const nbTotal = countLeafs(c.id);
-          const avgAdv = avancementCategorie(plan, c.id);
-          rows.splice(before, 0, { type: 'cat', node: c, depth, nbDirect: enfantsDirects.length, nbTotal, avgAdv });
-        }
-      } else {
-        if (filter.axe !== 'all' && !nextAncestors.includes(filter.axe) && c.parent !== filter.axe && !ancestorIds.includes(filter.axe)) continue;
-        if (!passes(c)) continue;
-        rows.push({ type: 'action', node: c, depth });
-      }
-    }
   }
   function countLeafs(id) {
     let n = 0;
@@ -377,20 +416,56 @@ function TableGroupee({ plan, filter, onSelect, selected, onAddChild }) {
     }
     return n;
   }
-  walk('racine', 0, []);
+
+  // Filtre axe : si défini, on ne descend que dans l'axe sélectionné
+  const rootChildren = filter.axe === 'all' ? childrenOf(plan, 'racine') : childrenOf(plan, 'racine').filter(a => a.id === filter.axe);
+
+  // Walk récursif : on rend TOUTES les catégories ET sous-catégories en lignes
+  // distinctes, suivies de leurs actions. Une catégorie sans descendants qui
+  // passe les filtres est masquée.
+  const rows = [];
+  function walk(parentId, depth, ancestorIds, parentChain) {
+    const enfants = parentId === 'racine'
+      ? rootChildren
+      : childrenOf(plan, parentId);
+    for (const c of enfants) {
+      const nextAncestors = [...ancestorIds, c.id];
+      const nextChain = [...parentChain, c];
+      if (isCategory(c)) {
+        // Collecte les descendants pour savoir si la cat a contenu visible
+        const before = rows.length;
+        walk(c.id, depth + 1, nextAncestors, nextChain);
+        const after = rows.length;
+        if (after > before) {
+          const nbTotal = countLeafs(c.id);
+          const avgAdv = avancementCategorie(plan, c.id);
+          // Header inséré au-dessus des descendants
+          rows.splice(before, 0, { type: 'cat', node: c, depth, nbTotal, avgAdv, chain: parentChain });
+        }
+      } else {
+        if (!passes(c)) continue;
+        rows.push({ type: 'action', node: c, depth, chain: parentChain });
+      }
+    }
+  }
+  walk('racine', 0, [], []);
 
   if (rows.length === 0) {
     return <div style={{ background: '#fff', border: '1px solid #e8ecf0', borderRadius: 12, padding: 40, textAlign: 'center', color: '#94a3b8' }}>Aucune action ne correspond aux filtres.</div>;
   }
 
   const INDENT = 22;
+  // Profondeur de l'axe parent pour calculer la bordure colorée à gauche
+  function axeColorOf(chain) {
+    return chain[0]?.couleur || '#cbd5e1';
+  }
   return (
     <div style={{ background: '#fff', border: '1px solid #e8ecf0', borderRadius: 12, overflow: 'hidden' }}>
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e8ecf0' }}>
-              {['Action / catégorie', 'Objectif', 'Responsable', 'Échéance', 'Statut', 'Priorité', 'Société', 'Avancement', ''].map((h, i) => (
+              {['Hiérarchie', 'Objectif', 'Responsable', 'Échéance', 'Statut', 'Priorité', 'Société', 'Avancement', ''].map((h, i) => (
                 <th key={i} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
@@ -399,21 +474,41 @@ function TableGroupee({ plan, filter, onSelect, selected, onAddChild }) {
             {rows.map((r, i) => {
               const n = r.node;
               const indent = r.depth * INDENT;
+              const axeColor = r.depth === 0 ? (n.couleur || '#cbd5e1') : axeColorOf(r.chain);
               if (r.type === 'cat') {
+                const isAxe = r.depth === 0;
+                const isSousCat = r.depth === 1;
                 return (
-                  <tr key={`cat-${n.id}-${i}`} style={{ background: `${n.couleur}10`, borderTop: r.depth === 0 ? '2px solid #e8ecf0' : '1px solid #f1f5f9' }}>
-                    <td colSpan={9} style={{ padding: '8px 12px', paddingLeft: 12 + indent, borderLeft: r.depth === 0 ? `4px solid ${n.couleur}` : 'none' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span style={{ fontSize: r.depth === 0 ? 14 : 13, fontWeight: 800, color: n.couleur }}>
-                          {r.depth === 0 ? '📂' : r.depth === 1 ? '📁' : '↳'} {n.icone} {n.label}
+                  <tr key={`cat-${n.id}-${i}`} style={{
+                    background: isAxe ? `${n.couleur}18` : `${n.couleur}08`,
+                    borderTop: isAxe ? '3px solid #e8ecf0' : 'none',
+                  }}>
+                    <td colSpan={9} style={{
+                      padding: isAxe ? '10px 12px' : '6px 12px',
+                      paddingLeft: 12 + indent,
+                      borderLeft: `${isAxe ? 5 : 3}px solid ${axeColor}`,
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                        {/* Tags niveau */}
+                        <span style={{ fontSize: 9, fontWeight: 800, padding: '2px 6px', borderRadius: 4, background: n.couleur, color: '#fff', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                          {isAxe ? 'AXE' : isSousCat ? 'SOUS-CATÉGORIE' : `NIVEAU ${r.depth + 1}`}
+                        </span>
+                        <span style={{ fontSize: isAxe ? 15 : 13, fontWeight: 800, color: n.couleur }}>
+                          {isAxe ? '📂' : '📁'} {n.icone} {n.label}
                         </span>
                         <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 500 }}>
                           · {r.nbTotal} action{r.nbTotal > 1 ? 's' : ''}
                           {r.avgAdv != null && ` · avancement moy. ${Math.round(r.avgAdv)}%`}
                         </span>
+                        {/* Mini barre d'avancement */}
+                        {r.avgAdv != null && (
+                          <div style={{ width: 80, height: 4, background: '#f1f5f9', borderRadius: 99, overflow: 'hidden' }}>
+                            <div style={{ width: `${r.avgAdv}%`, height: '100%', background: n.couleur, borderRadius: 99 }} />
+                          </div>
+                        )}
                         <button onClick={(e) => { e.stopPropagation(); onAddChild(n.id); }}
                           style={{ marginLeft: 'auto', padding: '3px 10px', fontSize: 11, fontWeight: 700, background: n.couleur, color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
-                          + Ajouter une action
+                          + Ajouter
                         </button>
                         <button onClick={(e) => { e.stopPropagation(); onSelect(n); }}
                           style={{ padding: '3px 8px', fontSize: 11, background: 'transparent', color: n.couleur, border: `1px solid ${n.couleur}`, borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
@@ -425,17 +520,22 @@ function TableGroupee({ plan, filter, onSelect, selected, onAddChild }) {
                 );
               }
               const soc = SOCIETES[n.societe] || SOCIETES.groupe;
+              // Breadcrumb d'arborescence pour les actions (utile en mode filtre ou recherche)
+              const breadcrumb = r.chain.length > 0 ? r.chain.map(c => c.label).join(' › ') : '';
               return (
                 <tr key={n.id} onClick={() => onSelect(n)}
                   style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer', background: selected === n.id ? '#fef3c7' : 'transparent' }}
                   onMouseEnter={e => { if (selected !== n.id) e.currentTarget.style.background = '#f8fafc'; }}
                   onMouseLeave={e => { if (selected !== n.id) e.currentTarget.style.background = 'transparent'; }}>
-                  <td style={{ padding: '8px 12px', paddingLeft: 12 + indent, borderLeft: `3px solid ${n.couleur || '#cbd5e1'}` }}>
+                  <td style={{ padding: '8px 12px', paddingLeft: 12 + indent, borderLeft: `3px solid ${axeColor}` }}>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                      <span style={{ color: '#cbd5e1', fontSize: 10 }}>•</span>
+                      <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#f1f5f9', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.4 }}>TÂCHE</span>
                       <span style={{ fontWeight: 600, color: '#1e293b' }}>{n.icone} {n.label}</span>
                     </div>
-                    {n.impact && <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2, marginLeft: 16 }}>→ {n.impact}</div>}
+                    {n.impact && <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2, marginLeft: 4 }}>→ {n.impact}</div>}
+                    {breadcrumb && r.chain.length > 0 && (
+                      <div style={{ fontSize: 10, color: '#cbd5e1', marginTop: 2, fontStyle: 'italic' }}>{breadcrumb}</div>
+                    )}
                   </td>
                   <td style={{ padding: '8px 12px', color: '#475569', fontSize: 12, maxWidth: 240 }}>{n.objectif || '—'}</td>
                   <td style={{ padding: '8px 12px', color: '#475569', fontSize: 12 }}>{n.responsable || '—'}</td>
@@ -660,6 +760,31 @@ export default function PlanProgression() {
   }
   function onSelectFromTable(node) { setSelected(node.id); setEditNode(node); }
 
+  // Drag d'un noeud : optimistic update (persist = false) puis save au drop (persist = true)
+  // Si x === null → reset à la position auto
+  async function onMoveNode(id, x, y, persist) {
+    setPlan(p => {
+      const next = { ...p, noeuds: p.noeuds.map(n => {
+        if (n.id !== id) return n;
+        if (x === null) {
+          const { x: _, y: __, ...rest } = n;
+          return rest;
+        }
+        return { ...n, x, y };
+      }) };
+      return next;
+    });
+    if (persist) {
+      const node = plan.noeuds.find(n => n.id === id);
+      const patch = x === null ? { id, x: null, y: null } : { id, x, y };
+      try {
+        const r = await fetch('/api/plan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'upsertNode', node: { ...node, ...patch } }) });
+        const j = await r.json();
+        if (j.ok) { setPlan(j.plan); setSavedAt(new Date()); }
+      } catch {}
+    }
+  }
+
   return (
     <>
       <Head><title>Plan de progression · Dashboard Groupe</title></Head>
@@ -719,7 +844,7 @@ export default function PlanProgression() {
 
               {/* Vue : mindmap seule */}
               {view === 'mindmap' && (
-                <Mindmap plan={plan} onSelect={onSelectFromMindmap} selectedId={selected} expandedIds={expandedIds} toggleExpanded={toggleExpanded} onAddChild={onAddChildFromMindmap} onEdit={onEditFromMindmap} />
+                <Mindmap plan={plan} onSelect={onSelectFromMindmap} selectedId={selected} expandedIds={expandedIds} toggleExpanded={toggleExpanded} onAddChild={onAddChildFromMindmap} onEdit={onEditFromMindmap} onMoveNode={onMoveNode} />
               )}
 
               {/* Vue : table seule */}
@@ -730,7 +855,7 @@ export default function PlanProgression() {
               {/* Vue : côte à côte */}
               {view === 'split' && (
                 <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 14 }}>
-                  <Mindmap plan={plan} onSelect={onSelectFromMindmap} selectedId={selected} expandedIds={expandedIds} toggleExpanded={toggleExpanded} onAddChild={onAddChildFromMindmap} onEdit={onEditFromMindmap} />
+                  <Mindmap plan={plan} onSelect={onSelectFromMindmap} selectedId={selected} expandedIds={expandedIds} toggleExpanded={toggleExpanded} onAddChild={onAddChildFromMindmap} onEdit={onEditFromMindmap} onMoveNode={onMoveNode} />
                   <TableGroupee plan={plan} filter={filter} onSelect={onSelectFromTable} selected={selected} onAddChild={onAddChildFromMindmap} />
                 </div>
               )}
