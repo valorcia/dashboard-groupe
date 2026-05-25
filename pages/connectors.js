@@ -140,36 +140,61 @@ export default function Connectors() {
                   )}
                 </div>
 
-                {/* Champs */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
-                  {fields.map(f => {
-                    const v = data.values[f.key] || { source: null, defined: false };
-                    const sourceMeta = SOURCE_LABELS[v.source || 'null'];
-                    const editing = edits[f.key] !== undefined;
+                {/* Champs groupés par société : global → 123SPA → Luca → Valorcia */}
+                {(() => {
+                  const SOC_META = {
+                    all:      { label: '⚙ Configuration globale (partagée par les 3 sociétés)', bg: '#f8fafc', accent: '#64748b' },
+                    spa:      { label: '🇫🇷 123SPA',                                              bg: '#eff6ff', accent: '#3498DB' },
+                    luca:     { label: '🇧🇪 Luca Création',                                       bg: '#f0fdf4', accent: '#27AE60' },
+                    valorcia: { label: '🇱🇺 Valorcia',                                            bg: '#fff7ed', accent: '#E67E22' },
+                  };
+                  const groups = ['all', 'spa', 'luca', 'valorcia']
+                    .map(s => ({ societe: s, fields: fields.filter(f => (f.societe || 'all') === s) }))
+                    .filter(g => g.fields.length > 0);
+
+                  return groups.map((g) => {
+                    const meta = SOC_META[g.societe];
                     return (
-                      <div key={f.key} style={{ background: '#fafbfc', border: '1px solid #e8ecf0', borderRadius: 8, padding: '10px 12px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4, gap: 8 }}>
-                          <label style={{ fontSize: 11, fontWeight: 600, color: '#475569' }}>
-                            {f.label}
-                            {f.required && <span style={{ color: '#dc2626', marginLeft: 4 }}>*</span>}
-                          </label>
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: sourceMeta.bg, color: sourceMeta.color, letterSpacing: 0.4 }}>{sourceMeta.label}</span>
-                        </div>
-                        <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 6, fontFamily: 'monospace' }}>{f.key}</div>
-                        <input
-                          type={f.secret && !editing ? 'password' : 'text'}
-                          value={editing ? edits[f.key] : (v.defined && !f.secret ? (v.value || '') : '')}
-                          placeholder={v.defined ? (f.secret ? '••••••••' : '') : (f.placeholder || (f.secret ? 'Secret' : 'Valeur'))}
-                          onChange={(e) => setEdits({ ...edits, [f.key]: e.target.value })}
-                          style={{ width: '100%', padding: '8px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 12, fontFamily: f.secret ? 'monospace' : 'inherit', boxSizing: 'border-box' }}
-                        />
-                        {editing && (
-                          <div style={{ marginTop: 4, fontSize: 10, color: '#7c3aed', fontWeight: 600 }}>↳ modification en attente · Enregistrer ↓</div>
+                      <div key={g.societe} style={{ marginTop: 10, marginBottom: 12 }}>
+                        {groups.length > 1 && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: meta.bg, borderLeft: `4px solid ${meta.accent}`, borderRadius: '6px 6px 0 0', borderBottom: `1px solid ${meta.accent}33` }}>
+                            <span style={{ fontWeight: 700, fontSize: 12, color: meta.accent, letterSpacing: 0.3 }}>{meta.label}</span>
+                            <span style={{ fontSize: 11, color: '#94a3b8' }}>· {g.fields.length} champ{g.fields.length > 1 ? 's' : ''}</span>
+                          </div>
                         )}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10, padding: groups.length > 1 ? '10px 12px' : 0, background: groups.length > 1 ? '#ffffff' : 'transparent', border: groups.length > 1 ? `1px solid ${meta.accent}22` : 'none', borderTop: 'none', borderRadius: '0 0 6px 6px' }}>
+                          {g.fields.map(f => {
+                            const v = data.values[f.key] || { source: null, defined: false };
+                            const sourceMeta = SOURCE_LABELS[v.source || 'null'];
+                            const editing = edits[f.key] !== undefined;
+                            return (
+                              <div key={f.key} style={{ background: '#fafbfc', border: '1px solid #e8ecf0', borderRadius: 8, padding: '10px 12px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4, gap: 8 }}>
+                                  <label style={{ fontSize: 11, fontWeight: 600, color: '#475569' }}>
+                                    {f.label}
+                                    {f.required && <span style={{ color: '#dc2626', marginLeft: 4 }}>*</span>}
+                                  </label>
+                                  <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: sourceMeta.bg, color: sourceMeta.color, letterSpacing: 0.4 }}>{sourceMeta.label}</span>
+                                </div>
+                                <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 6, fontFamily: 'monospace' }}>{f.key}</div>
+                                <input
+                                  type={f.secret && !editing ? 'password' : 'text'}
+                                  value={editing ? edits[f.key] : (v.defined && !f.secret ? (v.value || '') : '')}
+                                  placeholder={v.defined ? (f.secret ? '••••••••' : '') : (f.placeholder || (f.secret ? 'Secret' : 'Valeur'))}
+                                  onChange={(e) => setEdits({ ...edits, [f.key]: e.target.value })}
+                                  style={{ width: '100%', padding: '8px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 12, fontFamily: f.secret ? 'monospace' : 'inherit', boxSizing: 'border-box' }}
+                                />
+                                {editing && (
+                                  <div style={{ marginTop: 4, fontSize: 10, color: '#7c3aed', fontWeight: 600 }}>↳ modification en attente · Enregistrer ↓</div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     );
-                  })}
-                </div>
+                  });
+                })()}
 
                 {/* Bouton enregistrer */}
                 <div style={{ marginTop: 14, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
