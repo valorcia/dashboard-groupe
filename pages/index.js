@@ -91,6 +91,8 @@ const data = {
   },
   agents: [
     // ─── Commercial ─────────────────────────────────────────────────────
+    { nom: "Agent Prospection", icone: "🤖", avatarSeed: "prospection-bot-77", type: "AGENT", categorie: "Commercial", statut: "Concept", env: "—", avancement: 5, desc: "Recherche outbound : campings, hôtels, architectes, particuliers HP", couleur: "#7c3aed", sources: ["Google Maps", "LinkedIn", "INSEE", "Permis BC"], lien: "/agents/prospection" },
+    { nom: "Agent Qualification", icone: "🤖", avatarSeed: "qualification-bot-88", type: "AGENT", categorie: "Commercial", statut: "Concept", env: "—", avancement: 5, desc: "Tunnel conversion auto : scoring → email perso → WhatsApp → relances → RDV", couleur: "#0891b2", sources: ["Odoo CRM", "Outlook", "WhatsApp", "Calendly"], lien: "/agents/qualification" },
     { nom: "Agent Commercial", icone: "🎯", avatarSeed: "commercial-bot-42", type: "AGENT", categorie: "Commercial", statut: "En dev", env: "Vercel", avancement: 40, desc: "Analyse leads, traçabilité, relances devis", couleur: "#dc2626", sources: ["Odoo CRM", "Outlook", "Jotform"], onglet: "commercial-agent" },
     { nom: "/devis-relance", icone: "📨", avatarSeed: "devis-bot-11", type: "SKILL", categorie: "Commercial", statut: "Actif", env: "Vercel", avancement: 70, desc: "Relance automatique devis sans réponse > 7j", couleur: "#ef4444", sources: ["Odoo Vente", "Outlook"] },
     { nom: "/lead-qualif", icone: "🔎", avatarSeed: "lead-bot-22", type: "SKILL", categorie: "Commercial", statut: "En dev", env: "—", avancement: 30, desc: "Qualification auto des leads entrants (BANT)", couleur: "#f97316", sources: ["Jotform", "Outlook"] },
@@ -229,17 +231,17 @@ function ProgressBar({ value, color }) {
 // chaque étape avec ses KPIs clés. Visuel inspiré sales funnel + entonnoir
 // classique : largeur dégressive vers le bas, gradient bleu → vert.
 const FUNNEL_ETAPES = [
-  { id: 'pub',         icone: '🟦', titre: 'Données publicitaires',     desc: 'Google Ads + Meta Ads — dépense / clics / impressions',         couleur: '#1e3a8a', source: 'Google Ads · Meta',         kpis: [{ l: 'Dépense pub',  v: '2 760 €' }, { l: 'Impressions', v: '76,6k' }, { l: 'Clics',       v: '1 926' }] },
-  { id: 'mkt',         icone: '📣', titre: 'Marketing & SEO',           desc: 'Search Console + GA4 + Instagram + GMB',                         couleur: '#1d4ed8', source: 'GSC · GA4 · IG · GMB',      kpis: [{ l: 'Sessions site', v: '18,4k' }, { l: 'CTR SEO',      v: '2,4 %' }, { l: 'Followers IG', v: '4 280' }] },
-  { id: 'leads',       icone: '🎯', titre: 'Leads & provenance',        desc: 'Tous canaux : Jotform / Outlook / Site / Réseaux / GMB',         couleur: '#2563eb', source: 'Odoo CRM · Jotform',        kpis: [{ l: 'Leads totaux', v: '47' },  { l: 'Top source',   v: 'Outlook 38 %' }, { l: 'Pays N°1',  v: '🇫🇷 FR 47 %' }] },
-  { id: 'agent_com',   icone: '🎯', titre: 'Agent Commercial (IA)',     desc: 'Qualification leads, traçabilité, scoring, relances auto',       couleur: '#0891b2', source: 'Agent · Odoo CRM',          kpis: [{ l: 'Leads qualifiés', v: '28' }, { l: 'Actions IA / j', v: '12' }, { l: 'Tps réponse',  v: '< 4 min' }] },
-  { id: 'agent_pros',  icone: '🤖', titre: 'Agent Prospection (à créer)',desc: 'Outbound automatisé : LinkedIn, mailing froid, retargeting',     couleur: '#0e7490', source: 'Agent (à créer)',           kpis: [{ l: 'Cibles identifiées', v: '— ' }, { l: 'Touches programmées', v: '—' }, { l: 'Conv. à venir', v: '—' }] },
-  { id: 'devis',       icone: '📄', titre: 'Devis envoyés',             desc: 'Devis générés depuis Odoo Vente + suivi statuts',                couleur: '#0d9488', source: 'Odoo Vente',                kpis: [{ l: 'Devis envoyés',   v: '28' }, { l: 'En attente',      v: '9'  }, { l: 'Délai moyen', v: '5 j' }] },
-  { id: 'conversion',  icone: '💼', titre: 'Conversion devis → commandes',desc: 'Taux de transformation, deal velocity, gros deals',            couleur: '#15803d', source: 'Calcul · Odoo Vente',       kpis: [{ l: 'Conversion',      v: '25 %' }, { l: 'Commandes',      v: '7'  }, { l: 'Ticket moyen', v: '24,2 k€' }] },
-  { id: 'chantiers',   icone: '🏗️', titre: 'Production / Chantiers',    desc: 'Planning Planneo, retards, livraisons, SAV',                     couleur: '#16a34a', source: 'Planneo',                   kpis: [{ l: 'Chantiers',       v: '25' }, { l: 'Livraisons mois', v: '4'  }, { l: 'Retards > 2 sem', v: '3' }] },
-  { id: 'facturation', icone: '🧾', titre: 'Facturation',               desc: 'Factures générées, payées, impayées, échéances',                 couleur: '#22c55e', source: 'Odoo Compta',               kpis: [{ l: 'Facturé mois',    v: '178 k€' }, { l: 'Encaissé',     v: '47 k€' }, { l: 'Impayés',     v: '17 k€' }] },
-  { id: 'tresorerie',  icone: '💰', titre: 'Trésorerie',                desc: 'Vue hebdomadaire entrées/sorties + cumul + alertes',             couleur: '#65a30d', source: 'OneDrive Excel',            kpis: [{ l: 'Solde fin S21',   v: '71,8 k€' }, { l: 'Solde mini', v: '1,4 k€' }, { l: 'Tendance',     v: '↗ +12 k€' }] },
-  { id: 'compta',      icone: '📊', titre: 'Bilan comptable (vs N-1)',  desc: 'Vue Odoo temps réel comparée à l\'année précédente — progression',couleur: '#84cc16', source: 'Odoo Compta',               kpis: [{ l: 'CA YTD',  v: '745 k€', vs: '+18 %' }, { l: 'Marge', v: '52 %', vs: '+4 pts' }, { l: 'REX',  v: '142 k€', vs: '+26 %' }] },
+  { id: 'pub',         icone: '🟦', titre: 'Données publicitaires',     desc: 'Google Ads + Meta Ads — dépense / clics / impressions',                                              couleur: '#1e3a8a', source: 'Google Ads · Meta',         kpis: [{ l: 'Dépense pub',  v: '2 760 €' }, { l: 'Impressions', v: '76,6k' }, { l: 'Clics',       v: '1 926' }] },
+  { id: 'mkt',         icone: '📣', titre: 'Marketing & SEO',           desc: 'Search Console + GA4 + Instagram + GMB',                                                              couleur: '#1d4ed8', source: 'GSC · GA4 · IG · GMB',      kpis: [{ l: 'Sessions site', v: '18,4k' }, { l: 'CTR SEO',      v: '2,4 %' }, { l: 'Followers IG', v: '4 280' }] },
+  { id: 'agent_pros',  icone: '🤖', titre: 'Agent Prospection (outbound)',desc: 'Recherche auto : campings, architectes, syndics, hôtels, agences immo, particuliers cibles',          couleur: '#7c3aed', source: 'Agent à créer',             kpis: [{ l: 'Cibles identifiées', v: '— ' }, { l: 'Touches sortantes', v: '—' }, { l: 'Conv. en leads', v: '—' }] },
+  { id: 'leads',       icone: '🎯', titre: 'Leads & provenance',        desc: 'Tous canaux : Jotform / Outlook / Site / Réseaux / GMB + prospection sortante',                       couleur: '#2563eb', source: 'Odoo CRM · Jotform',        kpis: [{ l: 'Leads totaux', v: '47' },  { l: 'Top source',   v: 'Outlook 38 %' }, { l: 'Pays N°1',  v: '🇫🇷 FR 47 %' }] },
+  { id: 'agent_qual',  icone: '🤖', titre: 'Agent Qualification (inbound)',desc: 'Tunnel auto : scoring → mail perso → WhatsApp → relances → RDV → suivi devis',                      couleur: '#0891b2', source: 'Agent à créer',             kpis: [{ l: 'Leads qualifiés', v: '— ' }, { l: 'Tps 1er contact', v: '—' }, { l: 'Conv. lead→RDV', v: '—' }] },
+  { id: 'devis',       icone: '📄', titre: 'Devis envoyés',             desc: 'Devis générés depuis Odoo Vente + suivi statuts',                                                     couleur: '#0d9488', source: 'Odoo Vente',                kpis: [{ l: 'Devis envoyés',   v: '28' }, { l: 'En attente',      v: '9'  }, { l: 'Délai moyen', v: '5 j' }] },
+  { id: 'conversion',  icone: '💼', titre: 'Conversion devis → commandes',desc: 'Taux de transformation, deal velocity, gros deals',                                                 couleur: '#15803d', source: 'Calcul · Odoo Vente',       kpis: [{ l: 'Conversion',      v: '25 %' }, { l: 'Commandes',      v: '7'  }, { l: 'Ticket moyen', v: '24,2 k€' }] },
+  { id: 'chantiers',   icone: '🏗️', titre: 'Production / Chantiers',    desc: 'Planning Planneo, retards, livraisons, SAV',                                                          couleur: '#16a34a', source: 'Planneo',                   kpis: [{ l: 'Chantiers',       v: '25' }, { l: 'Livraisons mois', v: '4'  }, { l: 'Retards > 2 sem', v: '3' }] },
+  { id: 'facturation', icone: '🧾', titre: 'Facturation',               desc: 'Factures générées, payées, impayées, échéances',                                                      couleur: '#22c55e', source: 'Odoo Compta',               kpis: [{ l: 'Facturé mois',    v: '178 k€' }, { l: 'Encaissé',     v: '47 k€' }, { l: 'Impayés',     v: '17 k€' }] },
+  { id: 'tresorerie',  icone: '💰', titre: 'Trésorerie',                desc: 'Vue hebdomadaire entrées/sorties + cumul + alertes',                                                  couleur: '#65a30d', source: 'OneDrive Excel',            kpis: [{ l: 'Solde fin S21',   v: '71,8 k€' }, { l: 'Solde mini', v: '1,4 k€' }, { l: 'Tendance',     v: '↗ +12 k€' }] },
+  { id: 'compta',      icone: '📊', titre: 'Bilan comptable (vs N-1)',  desc: 'Vue Odoo temps réel comparée à l\'année précédente — progression',                                     couleur: '#84cc16', source: 'Odoo Compta',               kpis: [{ l: 'CA YTD',  v: '745 k€', vs: '+18 %' }, { l: 'Marge', v: '52 %', vs: '+4 pts' }, { l: 'REX',  v: '142 k€', vs: '+26 %' }] },
 ];
 
 function FunnelGroupe() {
@@ -287,8 +289,9 @@ function FunnelGroupe() {
 
 function FunnelEtape({ etape, index, total }) {
   const links = {
-    pub: '/kpi', mkt: '/kpi', leads: '/kpi', agent_com: '/agents',
-    agent_pros: '/plan', devis: '/kpi', conversion: '/kpi', chantiers: '/kpi',
+    pub: '/kpi', mkt: '/kpi', leads: '/kpi',
+    agent_pros: '/agents/prospection', agent_qual: '/agents/qualification',
+    devis: '/kpi', conversion: '/kpi', chantiers: '/kpi',
     facturation: '/kpi', tresorerie: '/kpi', compta: '/kpi',
   };
   return (
@@ -1224,18 +1227,21 @@ export default function Dashboard() {
                         return (
                         <div
                           key={i}
-                          onClick={() => app.onglet && setTab(app.onglet)}
+                          onClick={() => {
+                            if (app.lien) window.location.href = app.lien;
+                            else if (app.onglet) setTab(app.onglet);
+                          }}
                           style={{
                             background: "#fff",
                             border: "1px solid #e8ecf0",
                             borderLeft: `4px solid ${app.couleur}`,
                             borderRadius: 14,
                             padding: "18px 20px",
-                            cursor: app.onglet ? "pointer" : "default",
+                            cursor: (app.onglet || app.lien) ? "pointer" : "default",
                             transition: "transform .15s ease, box-shadow .15s ease",
                             position: "relative",
                           }}
-                          onMouseEnter={(e) => app.onglet && (e.currentTarget.style.transform = "translateY(-2px)", e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,.06)")}
+                          onMouseEnter={(e) => (app.onglet || app.lien) && (e.currentTarget.style.transform = "translateY(-2px)", e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,.06)")}
                           onMouseLeave={(e) => (e.currentTarget.style.transform = "translateY(0)", e.currentTarget.style.boxShadow = "none")}
                         >
                           {/* Badge type en haut à droite */}
@@ -1276,7 +1282,7 @@ export default function Dashboard() {
                           </div>
                           <ProgressBar value={app.avancement} color={app.couleur} />
 
-                          {app.onglet && (
+                          {(app.onglet || app.lien) && (
                             <div style={{ marginTop: 12, fontSize: 11, color: app.couleur, fontWeight: 600 }}>
                               → Voir le tableau de bord agent
                             </div>
