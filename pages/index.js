@@ -224,6 +224,124 @@ function ProgressBar({ value, color }) {
   );
 }
 
+// ─── FUNNEL STRATÉGIQUE — Entonnoir 360° du groupe ─────────────────────────
+// 11 étapes du haut (acquisition publicitaire) vers le bas (bilan comptable),
+// chaque étape avec ses KPIs clés. Visuel inspiré sales funnel + entonnoir
+// classique : largeur dégressive vers le bas, gradient bleu → vert.
+const FUNNEL_ETAPES = [
+  { id: 'pub',         icone: '🟦', titre: 'Données publicitaires',     desc: 'Google Ads + Meta Ads — dépense / clics / impressions',         couleur: '#1e3a8a', source: 'Google Ads · Meta',         kpis: [{ l: 'Dépense pub',  v: '2 760 €' }, { l: 'Impressions', v: '76,6k' }, { l: 'Clics',       v: '1 926' }] },
+  { id: 'mkt',         icone: '📣', titre: 'Marketing & SEO',           desc: 'Search Console + GA4 + Instagram + GMB',                         couleur: '#1d4ed8', source: 'GSC · GA4 · IG · GMB',      kpis: [{ l: 'Sessions site', v: '18,4k' }, { l: 'CTR SEO',      v: '2,4 %' }, { l: 'Followers IG', v: '4 280' }] },
+  { id: 'leads',       icone: '🎯', titre: 'Leads & provenance',        desc: 'Tous canaux : Jotform / Outlook / Site / Réseaux / GMB',         couleur: '#2563eb', source: 'Odoo CRM · Jotform',        kpis: [{ l: 'Leads totaux', v: '47' },  { l: 'Top source',   v: 'Outlook 38 %' }, { l: 'Pays N°1',  v: '🇫🇷 FR 47 %' }] },
+  { id: 'agent_com',   icone: '🎯', titre: 'Agent Commercial (IA)',     desc: 'Qualification leads, traçabilité, scoring, relances auto',       couleur: '#0891b2', source: 'Agent · Odoo CRM',          kpis: [{ l: 'Leads qualifiés', v: '28' }, { l: 'Actions IA / j', v: '12' }, { l: 'Tps réponse',  v: '< 4 min' }] },
+  { id: 'agent_pros',  icone: '🤖', titre: 'Agent Prospection (à créer)',desc: 'Outbound automatisé : LinkedIn, mailing froid, retargeting',     couleur: '#0e7490', source: 'Agent (à créer)',           kpis: [{ l: 'Cibles identifiées', v: '— ' }, { l: 'Touches programmées', v: '—' }, { l: 'Conv. à venir', v: '—' }] },
+  { id: 'devis',       icone: '📄', titre: 'Devis envoyés',             desc: 'Devis générés depuis Odoo Vente + suivi statuts',                couleur: '#0d9488', source: 'Odoo Vente',                kpis: [{ l: 'Devis envoyés',   v: '28' }, { l: 'En attente',      v: '9'  }, { l: 'Délai moyen', v: '5 j' }] },
+  { id: 'conversion',  icone: '💼', titre: 'Conversion devis → commandes',desc: 'Taux de transformation, deal velocity, gros deals',            couleur: '#15803d', source: 'Calcul · Odoo Vente',       kpis: [{ l: 'Conversion',      v: '25 %' }, { l: 'Commandes',      v: '7'  }, { l: 'Ticket moyen', v: '24,2 k€' }] },
+  { id: 'chantiers',   icone: '🏗️', titre: 'Production / Chantiers',    desc: 'Planning Planneo, retards, livraisons, SAV',                     couleur: '#16a34a', source: 'Planneo',                   kpis: [{ l: 'Chantiers',       v: '25' }, { l: 'Livraisons mois', v: '4'  }, { l: 'Retards > 2 sem', v: '3' }] },
+  { id: 'facturation', icone: '🧾', titre: 'Facturation',               desc: 'Factures générées, payées, impayées, échéances',                 couleur: '#22c55e', source: 'Odoo Compta',               kpis: [{ l: 'Facturé mois',    v: '178 k€' }, { l: 'Encaissé',     v: '47 k€' }, { l: 'Impayés',     v: '17 k€' }] },
+  { id: 'tresorerie',  icone: '💰', titre: 'Trésorerie',                desc: 'Vue hebdomadaire entrées/sorties + cumul + alertes',             couleur: '#65a30d', source: 'OneDrive Excel',            kpis: [{ l: 'Solde fin S21',   v: '71,8 k€' }, { l: 'Solde mini', v: '1,4 k€' }, { l: 'Tendance',     v: '↗ +12 k€' }] },
+  { id: 'compta',      icone: '📊', titre: 'Bilan comptable (vs N-1)',  desc: 'Vue Odoo temps réel comparée à l\'année précédente — progression',couleur: '#84cc16', source: 'Odoo Compta',               kpis: [{ l: 'CA YTD',  v: '745 k€', vs: '+18 %' }, { l: 'Marge', v: '52 %', vs: '+4 pts' }, { l: 'REX',  v: '142 k€', vs: '+26 %' }] },
+];
+
+function FunnelGroupe() {
+  const N = FUNNEL_ETAPES.length;
+  // Largeur dégressive du haut vers le bas : 100% → 60%
+  const widthFor = (i) => 100 - (i / (N - 1)) * 40;
+  return (
+    <div style={{ background: "linear-gradient(180deg, #f8fafc 0%, #fff 100%)", border: "1px solid #e8ecf0", borderRadius: 16, padding: "20px 24px", marginBottom: 24 }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
+        <div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: "#1e293b", letterSpacing: -0.3 }}>🌀 Entonnoir stratégique du groupe</div>
+          <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>De l'acquisition publicitaire à la comptabilité — {N} étapes consolidées en temps réel</div>
+        </div>
+        <div style={{ display: "flex", gap: 6, fontSize: 10 }}>
+          <span style={{ padding: "3px 8px", background: "#dbeafe", color: "#1e3a8a", borderRadius: 99, fontWeight: 700 }}>HAUT = ACQUISITION</span>
+          <span style={{ padding: "3px 8px", background: "#dcfce7", color: "#15803d", borderRadius: 99, fontWeight: 700 }}>BAS = RÉSULTAT</span>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, position: "relative" }}>
+        {/* Connecteur vertical en fond */}
+        <div style={{ position: "absolute", left: "50%", top: 28, bottom: 28, width: 2, background: "linear-gradient(180deg, #1e3a8a 0%, #84cc16 100%)", opacity: 0.15, transform: "translateX(-50%)", borderRadius: 99, zIndex: 0 }} />
+        {FUNNEL_ETAPES.map((e, i) => {
+          const w = widthFor(i);
+          return (
+            <div key={e.id} style={{ width: `${w}%`, position: "relative", zIndex: 1 }}>
+              <FunnelEtape etape={e} index={i} total={N} />
+              {i < N - 1 && (
+                <div style={{ display: "flex", justifyContent: "center", margin: "2px 0" }}>
+                  <span style={{ fontSize: 14, color: e.couleur, opacity: 0.6 }}>▼</span>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ marginTop: 18, padding: "10px 14px", background: "#f8fafc", borderRadius: 8, fontSize: 11, color: "#64748b", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+        <span>💡 Cliquer sur une étape pour ouvrir son dashboard détaillé · Données démo en attendant le branchement des connecteurs</span>
+        <span style={{ fontWeight: 700, color: "#475569" }}>Sources : Google Ads · Meta · GSC · GA4 · IG · GMB · Odoo · Planneo · OneDrive</span>
+      </div>
+    </div>
+  );
+}
+
+function FunnelEtape({ etape, index, total }) {
+  const links = {
+    pub: '/kpi', mkt: '/kpi', leads: '/kpi', agent_com: '/agents',
+    agent_pros: '/plan', devis: '/kpi', conversion: '/kpi', chantiers: '/kpi',
+    facturation: '/kpi', tresorerie: '/kpi', compta: '/kpi',
+  };
+  return (
+    <a href={links[etape.id] || '/'} style={{ textDecoration: 'none', display: 'block' }}>
+      <div style={{
+        background: `linear-gradient(135deg, ${etape.couleur} 0%, ${etape.couleur}dd 100%)`,
+        color: '#fff',
+        borderRadius: 12,
+        padding: '14px 20px',
+        boxShadow: `0 4px 14px ${etape.couleur}33`,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 16,
+        transition: 'transform .15s ease, box-shadow .15s ease',
+        cursor: 'pointer',
+      }}
+      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 8px 22px ${etape.couleur}55`; }}
+      onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = `0 4px 14px ${etape.couleur}33`; }}
+      >
+        {/* Numéro d'étape */}
+        <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(255,255,255,.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 14, flexShrink: 0, border: '2px solid rgba(255,255,255,.3)' }}>
+          {String(index + 1).padStart(2, '0')}
+        </div>
+
+        {/* Icône */}
+        <div style={{ fontSize: 28, flexShrink: 0 }}>{etape.icone}</div>
+
+        {/* Titre + desc */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+            <div style={{ fontSize: 15, fontWeight: 800, letterSpacing: -0.2 }}>{etape.titre}</div>
+            <div style={{ fontSize: 10, opacity: 0.75, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>{etape.source}</div>
+          </div>
+          <div style={{ fontSize: 12, opacity: 0.85, marginTop: 2 }}>{etape.desc}</div>
+        </div>
+
+        {/* KPIs inline */}
+        <div style={{ display: 'flex', gap: 18, flexShrink: 0, alignItems: 'center' }}>
+          {etape.kpis.map((k, j) => (
+            <div key={j} style={{ textAlign: 'right', borderLeft: '1px solid rgba(255,255,255,.2)', paddingLeft: 14 }}>
+              <div style={{ fontSize: 9, opacity: 0.75, textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600, whiteSpace: 'nowrap' }}>{k.l}</div>
+              <div style={{ fontSize: 16, fontWeight: 800, lineHeight: 1, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
+                {k.v}
+                {k.vs && <span style={{ fontSize: 10, opacity: 0.85, marginLeft: 4, color: '#86efac' }}>{k.vs}</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </a>
+  );
+}
+
 function KpiCard({ label, value, sub, alert, color }) {
   return (
     <div style={{ background: "#fff", border: alert ? "1.5px solid #fca5a5" : "1px solid #e8ecf0", borderRadius: 12, padding: "16px 18px", display: "flex", flexDirection: "column", gap: 4 }}>
@@ -386,6 +504,9 @@ export default function Dashboard() {
           {/* ─── VUE GÉNÉRALE ─── */}
           {tab === "overview" && (
             <div>
+              {/* ─── ENTONNOIR STRATÉGIQUE — Vue 360° du groupe ─── */}
+              <FunnelGroupe />
+
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 24 }}>
                 <KpiCard label="Trésorerie groupe" value={`${(totalTreso / 1000).toFixed(1)}k€`} sub="3 sociétés consolidées" alert={totalAlerts > 0} />
                 <KpiCard label="Chantiers actifs" value={totalChantiers} sub="BEL + LUX" color="#2e6da4" />

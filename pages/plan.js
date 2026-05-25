@@ -80,34 +80,38 @@ function lineage(plan, id) {
   return chain.reverse();
 }
 
-// ─── Mindmap radial — profondeur libre ─────────────────────────────────────
-function Mindmap({ plan, onSelect, selectedId, expandedIds, toggleExpanded }) {
-  const W = 1100, H = 720;
-  const cx = W / 2, cy = H / 2;
+// ─── Mindmap interactive façon MindMeister ─────────────────────────────────
+// Pan : drag avec la souris ou le doigt sur un espace vide.
+// Zoom : molette (ou pinch) + boutons + / - / reset.
+// Boutons + sur chaque noeud → ajout rapide d'une tâche enfant.
+function Mindmap({ plan, onSelect, selectedId, expandedIds, toggleExpanded, onAddChild, onEdit }) {
+  const svgRef = useRef(null);
+  const [transform, setTransform] = useState({ x: 0, y: 0, k: 1 });
+  const [dragging, setDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0, tx: 0, ty: 0 });
+  const [hoverId, setHoverId] = useState(null);
+
+  // ─ Layout récursif (mêmes calculs qu'avant, mais on stocke aussi le noeud entier)
+  const cx = 0, cy = 0; // espace logique infini centré sur (0,0)
   const elements = [];
   const lignes = [];
 
   elements.push({ id: 'racine', x: cx, y: cy, w: 220, h: 64, label: plan.racine.label, color: plan.racine.couleur || '#1e293b', depth: 0, isRoot: true });
 
-  // Layout récursif : pour chaque niveau, on positionne les enfants dans un arc autour du parent.
   function layoutChildren(parentId, px, py, baseAngle, arcWidth, depth) {
     if (!expandedIds.has(parentId) && parentId !== 'racine') return;
     const children = childrenOf(plan, parentId);
     if (children.length === 0) return;
-
-    const radius = depth === 1 ? 220 : depth === 2 ? 140 : 95;
-    const nodeW = depth === 1 ? 180 : depth === 2 ? 150 : 130;
-    const nodeH = depth === 1 ? 54 : depth === 2 ? 46 : 38;
-
+    const radius = depth === 1 ? 260 : depth === 2 ? 170 : 120;
+    const nodeW = depth === 1 ? 200 : depth === 2 ? 160 : 140;
+    const nodeH = depth === 1 ? 60 : depth === 2 ? 50 : 42;
     children.forEach((c, i) => {
       const t = children.length === 1 ? 0.5 : i / (children.length - 1);
       const angle = baseAngle - arcWidth / 2 + t * arcWidth;
       const x = px + Math.cos(angle) * radius;
       const y = py + Math.sin(angle) * radius;
-
       const childArcWidth = depth === 1 ? Math.PI / 2.5 : Math.PI / 3.2;
       const nbGrandChildren = childrenOf(plan, c.id).length;
-
       elements.push({
         id: c.id, x, y, w: nodeW, h: nodeH,
         label: `${c.icone || ''} ${c.label}`,
@@ -116,34 +120,85 @@ function Mindmap({ plan, onSelect, selectedId, expandedIds, toggleExpanded }) {
         hasChildren: nbGrandChildren > 0,
         nbChildren: nbGrandChildren,
         isCategory: isCategory(c),
+        angle,
       });
       lignes.push({ x1: px, y1: py, x2: x, y2: y, color: c.couleur || '#cbd5e1' });
-
-      // Récursion sur les enfants
       layoutChildren(c.id, x, y, angle, childArcWidth, depth + 1);
     });
   }
 
-  // Niveau 1 : axes autour de la racine, sur 360°
   const axes = childrenOf(plan, 'racine');
   axes.forEach((axe, i) => {
-    const angle = (-Math.PI / 2) + (i / axes.length) * Math.PI * 2;
-    const x = cx + Math.cos(angle) * 230;
-    const y = cy + Math.sin(angle) * 230;
+    const angle = (-Math.PI / 2) + (i / Math.max(axes.length, 1)) * Math.PI * 2;
+    const x = cx + Math.cos(angle) * 280;
+    const y = cy + Math.sin(angle) * 280;
     const nbChildren = childrenOf(plan, axe.id).length;
     elements.push({
-      id: axe.id, x, y, w: 200, h: 60,
+      id: axe.id, x, y, w: 210, h: 66,
       label: `${axe.icone || ''} ${axe.label}`,
       color: axe.couleur || '#64748b',
-      depth: 1, node: axe, hasChildren: nbChildren > 0, nbChildren, isCategory: isCategory(axe),
+      depth: 1, node: axe, hasChildren: nbChildren > 0, nbChildren, isCategory: isCategory(axe), angle,
     });
     lignes.push({ x1: cx, y1: cy, x2: x, y2: y, color: axe.couleur });
-    // Niveau 2+ : sous-catégories puis actions
     layoutChildren(axe.id, x, y, angle, Math.PI / 2.5, 2);
   });
 
+  // ─ Auto-fit au premier rendu ou quand la map change
+  useEffect(() => {
+    if (elements.length === 0) return;
+    const xs = elements.map(e => e.x);
+    const ys = elements.map(e => e.y);
+    const minX = Math.min(...xs) - 150;
+    const maxX = Math.max(...xs) + 150;
+    const minY = Math.min(...ys) - 80;
+    const maxY = Math.max(...ys) + 80;
+    const w = maxX - minX, h = maxY - minY;
+    const containerW = svgRef.current?.clientWidth || 1100;
+    const containerH = 640;
+    const k = Math.min(containerW / w, containerH / h, 1);
+    setTransform({ x: containerW / 2 - ((minX + maxX) / 2) * k, y: containerH / 2 - ((minY + maxY) / 2) * k, k });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plan.noeuds.length, expandedIds.size]);
+
+  function onMouseDown(e) {
+    if (e.target.closest('[data-node]')) return;
+    setDragging(true);
+    setDragStart({ x: e.clientX, y: e.clientY, tx: transform.x, ty: transform.y });
+  }
+  function onMouseMove(e) {
+    if (!dragging) return;
+    setTransform(t => ({ ...t, x: dragStart.tx + (e.clientX - dragStart.x), y: dragStart.ty + (e.clientY - dragStart.y) }));
+  }
+  function onMouseUp() { setDragging(false); }
+  function onWheel(e) {
+    e.preventDefault();
+    const rect = svgRef.current.getBoundingClientRect();
+    const px = e.clientX - rect.left, py = e.clientY - rect.top;
+    const delta = -e.deltaY * 0.0012;
+    setTransform(t => {
+      const newK = Math.max(0.2, Math.min(3, t.k * (1 + delta)));
+      const factor = newK / t.k;
+      return { x: px - (px - t.x) * factor, y: py - (py - t.y) * factor, k: newK };
+    });
+  }
+
+  function fit() {
+    if (elements.length === 0) return;
+    const xs = elements.map(e => e.x);
+    const ys = elements.map(e => e.y);
+    const w = (Math.max(...xs) + 150) - (Math.min(...xs) - 150);
+    const h = (Math.max(...ys) + 80) - (Math.min(...ys) - 80);
+    const cw = svgRef.current?.clientWidth || 1100;
+    const ch = 640;
+    const k = Math.min(cw / w, ch / h, 1);
+    setTransform({ x: cw / 2 - ((Math.min(...xs) + Math.max(...xs)) / 2) * k, y: ch / 2 - ((Math.min(...ys) + Math.max(...ys)) / 2) * k, k });
+  }
+  function zoomIn() { setTransform(t => ({ ...t, k: Math.min(3, t.k * 1.2) })); }
+  function zoomOut() { setTransform(t => ({ ...t, k: Math.max(0.2, t.k / 1.2) })); }
+  function recenter() { setTransform({ x: (svgRef.current?.clientWidth || 1100) / 2, y: 320, k: 1 }); }
+
   return (
-    <div style={{ background: '#fff', border: '1px solid #e8ecf0', borderRadius: 14, padding: 14 }}>
+    <div style={{ background: '#fff', border: '1px solid #e8ecf0', borderRadius: 14, padding: 14, position: 'relative' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>🧠 Carte mentale — {plan.noeuds.length} noeuds</div>
         <div style={{ display: 'flex', gap: 6, fontSize: 11 }}>
@@ -154,156 +209,250 @@ function Mindmap({ plan, onSelect, selectedId, expandedIds, toggleExpanded }) {
           <button onClick={() => toggleExpanded(null, 'reset')} style={btnSmall}>Tout replier</button>
         </div>
       </div>
-      <div style={{ overflow: 'auto' }}>
-        <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ minWidth: 700, maxWidth: '100%', display: 'block' }}>
-          {lignes.map((l, i) => (
-            <path key={`l-${i}`}
-              d={`M ${l.x1} ${l.y1} C ${(l.x1 + l.x2) / 2} ${l.y1}, ${(l.x1 + l.x2) / 2} ${l.y2}, ${l.x2} ${l.y2}`}
-              stroke={l.color} strokeOpacity="0.4" strokeWidth="2" fill="none" strokeLinecap="round" />
-          ))}
-          {elements.map((el) => {
-            const isSel = selectedId === el.id;
-            const isRoot = el.isRoot;
-            const adv = el.node && (isCategory(el.node) ? avancementCategorie(plan, el.id) : el.node.avancement);
-            return (
-              <g key={el.id} style={{ cursor: 'pointer' }} onClick={() => {
-                if (el.hasChildren) toggleExpanded(el.id);
-                onSelect(el.id);
-              }}>
-                <rect x={el.x - el.w / 2} y={el.y - el.h / 2} width={el.w} height={el.h}
-                  rx={isRoot ? 14 : el.isCategory ? 10 : 8}
-                  fill={isRoot ? el.color : el.isCategory ? `${el.color}15` : '#fff'}
-                  stroke={el.color}
-                  strokeWidth={isSel ? 3 : isRoot ? 0 : el.isCategory ? 2 : 1.5}
-                  strokeDasharray={el.isCategory && !isRoot ? '0' : undefined}
-                />
-                <text x={el.x} y={el.y + 4} textAnchor="middle"
-                  fontSize={isRoot ? 14 : el.depth === 1 ? 12 : el.depth === 2 ? 11 : 10}
-                  fontWeight={isRoot ? 800 : el.isCategory ? 700 : 600}
-                  fill={isRoot ? '#fff' : el.color}>
-                  {el.label.length > 28 ? el.label.slice(0, 26) + '…' : el.label}
-                </text>
-                {adv != null && !isRoot && (
-                  <g>
-                    <rect x={el.x - el.w / 2 + 8} y={el.y + el.h / 2 - 6} width={el.w - 16} height={3} rx={2} fill="#f1f5f9" />
-                    <rect x={el.x - el.w / 2 + 8} y={el.y + el.h / 2 - 6} width={(el.w - 16) * (adv / 100)} height={3} rx={2} fill={el.color} />
-                  </g>
-                )}
-                {el.hasChildren && !isRoot && (
-                  <>
-                    <circle cx={el.x + el.w / 2 - 8} cy={el.y - el.h / 2 + 8} r={10} fill={el.color} />
-                    <text x={el.x + el.w / 2 - 8} y={el.y - el.h / 2 + 11} textAnchor="middle" fontSize="10" fill="#fff" fontWeight="800">{el.nbChildren}</text>
-                  </>
-                )}
-              </g>
-            );
-          })}
+      <div
+        ref={svgRef}
+        onMouseDown={onMouseDown}
+        onMouseMove={onMouseMove}
+        onMouseUp={onMouseUp}
+        onMouseLeave={onMouseUp}
+        onWheel={onWheel}
+        style={{
+          position: 'relative',
+          height: 640,
+          background: 'radial-gradient(circle at center, #fafbfc 0%, #f1f5f9 100%)',
+          backgroundImage: 'radial-gradient(circle, #cbd5e133 1px, transparent 1px)',
+          backgroundSize: `${24 * transform.k}px ${24 * transform.k}px`,
+          backgroundPosition: `${transform.x}px ${transform.y}px`,
+          borderRadius: 10,
+          overflow: 'hidden',
+          cursor: dragging ? 'grabbing' : 'grab',
+          userSelect: 'none',
+          touchAction: 'none',
+        }}
+      >
+        <svg width="100%" height="100%" style={{ position: 'absolute', inset: 0 }}>
+          <g transform={`translate(${transform.x},${transform.y}) scale(${transform.k})`}>
+            {/* Lignes */}
+            {lignes.map((l, i) => (
+              <path key={`l-${i}`}
+                d={`M ${l.x1} ${l.y1} C ${(l.x1 + l.x2) / 2} ${l.y1}, ${(l.x1 + l.x2) / 2} ${l.y2}, ${l.x2} ${l.y2}`}
+                stroke={l.color} strokeOpacity="0.4" strokeWidth="2" fill="none" strokeLinecap="round" />
+            ))}
+            {/* Noeuds */}
+            {elements.map((el) => {
+              const isSel = selectedId === el.id;
+              const isRoot = el.isRoot;
+              const isHover = hoverId === el.id;
+              const adv = el.node && (isCategory(el.node) ? avancementCategorie(plan, el.id) : el.node.avancement);
+              return (
+                <g key={el.id} data-node="true"
+                   onMouseEnter={() => setHoverId(el.id)}
+                   onMouseLeave={() => setHoverId(null)}
+                   style={{ cursor: 'pointer' }}>
+                  <rect x={el.x - el.w / 2} y={el.y - el.h / 2} width={el.w} height={el.h}
+                    rx={isRoot ? 14 : el.isCategory ? 10 : 8}
+                    fill={isRoot ? el.color : el.isCategory ? `${el.color}15` : '#fff'}
+                    stroke={el.color}
+                    strokeWidth={isSel ? 3 : isRoot ? 0 : el.isCategory ? 2 : 1.5}
+                    filter={isHover ? 'url(#nodeShadow)' : undefined}
+                    onClick={(e) => { e.stopPropagation(); if (el.hasChildren) toggleExpanded(el.id); onSelect(el.id); }}
+                  />
+                  <text x={el.x} y={el.y + 4} textAnchor="middle"
+                    fontSize={isRoot ? 14 : el.depth === 1 ? 12 : el.depth === 2 ? 11 : 10}
+                    fontWeight={isRoot ? 800 : el.isCategory ? 700 : 600}
+                    fill={isRoot ? '#fff' : el.color}
+                    pointerEvents="none"
+                  >
+                    {el.label.length > 28 ? el.label.slice(0, 26) + '…' : el.label}
+                  </text>
+                  {adv != null && !isRoot && (
+                    <g pointerEvents="none">
+                      <rect x={el.x - el.w / 2 + 8} y={el.y + el.h / 2 - 6} width={el.w - 16} height={3} rx={2} fill="#f1f5f9" />
+                      <rect x={el.x - el.w / 2 + 8} y={el.y + el.h / 2 - 6} width={(el.w - 16) * (adv / 100)} height={3} rx={2} fill={el.color} />
+                    </g>
+                  )}
+                  {el.hasChildren && !isRoot && (
+                    <g pointerEvents="none">
+                      <circle cx={el.x + el.w / 2 - 8} cy={el.y - el.h / 2 + 8} r={10} fill={el.color} />
+                      <text x={el.x + el.w / 2 - 8} y={el.y - el.h / 2 + 11} textAnchor="middle" fontSize="10" fill="#fff" fontWeight="800">{el.nbChildren}</text>
+                    </g>
+                  )}
+                  {/* Boutons d'action au hover */}
+                  {(isHover || isSel) && (
+                    <g>
+                      {/* Bouton + (ajouter enfant) */}
+                      <g onClick={(e) => { e.stopPropagation(); onAddChild(el.id); }} style={{ cursor: 'pointer' }}>
+                        <circle cx={el.x + el.w / 2 + 14} cy={el.y} r={11} fill="#16a34a" stroke="#fff" strokeWidth="2" />
+                        <text x={el.x + el.w / 2 + 14} y={el.y + 4} textAnchor="middle" fontSize="14" fill="#fff" fontWeight="800" pointerEvents="none">+</text>
+                      </g>
+                      {/* Bouton ✏ (éditer) — seulement si pas la racine */}
+                      {!isRoot && (
+                        <g onClick={(e) => { e.stopPropagation(); onEdit(el.id); }} style={{ cursor: 'pointer' }}>
+                          <circle cx={el.x - el.w / 2 - 14} cy={el.y} r={11} fill="#3b82f6" stroke="#fff" strokeWidth="2" />
+                          <text x={el.x - el.w / 2 - 14} y={el.y + 4} textAnchor="middle" fontSize="11" fill="#fff" pointerEvents="none">✎</text>
+                        </g>
+                      )}
+                    </g>
+                  )}
+                </g>
+              );
+            })}
+            <defs>
+              <filter id="nodeShadow" x="-30%" y="-30%" width="160%" height="160%">
+                <feGaussianBlur in="SourceAlpha" stdDeviation="4" />
+                <feOffset dx="0" dy="3" />
+                <feComponentTransfer><feFuncA type="linear" slope="0.25"/></feComponentTransfer>
+                <feMerge><feMergeNode /><feMergeNode in="SourceGraphic"/></feMerge>
+              </filter>
+            </defs>
+          </g>
         </svg>
+
+        {/* Contrôles flottants : zoom + recentrage */}
+        <div style={{ position: 'absolute', top: 12, right: 12, display: 'flex', flexDirection: 'column', gap: 4, background: '#fff', borderRadius: 8, padding: 4, boxShadow: '0 2px 8px rgba(0,0,0,.1)' }}>
+          <button onClick={zoomIn} title="Zoomer" style={mapBtn}>＋</button>
+          <button onClick={zoomOut} title="Dézoomer" style={mapBtn}>−</button>
+          <button onClick={fit} title="Tout voir" style={{ ...mapBtn, fontSize: 12 }}>⛶</button>
+          <button onClick={recenter} title="Recentrer" style={{ ...mapBtn, fontSize: 12 }}>⌂</button>
+        </div>
+        <div style={{ position: 'absolute', bottom: 12, left: 12, background: 'rgba(255,255,255,.95)', padding: '4px 10px', borderRadius: 6, fontSize: 11, color: '#64748b', fontWeight: 600 }}>
+          🔍 {Math.round(transform.k * 100)}% · 🖱 Glisser le fond pour déplacer · Molette pour zoomer
+        </div>
       </div>
+
       <div style={{ display: 'flex', gap: 14, marginTop: 10, fontSize: 11, color: '#64748b', flexWrap: 'wrap' }}>
         <span>📊 {axes.length} axes</span>
         <span>· 🗂 {plan.noeuds.filter(n => isCategory(n)).length} catégories</span>
         <span>· ▢ {plan.noeuds.filter(n => !isCategory(n) && n.parent !== 'racine').length} actions</span>
-        <span>· Click sur un noeud avec compteur pour déplier/replier</span>
+        <span>· <span style={{ color: '#16a34a', fontWeight: 700 }}>+</span> au survol pour ajouter · <span style={{ color: '#3b82f6', fontWeight: 700 }}>✎</span> pour éditer</span>
       </div>
     </div>
   );
 }
 
+const mapBtn = { width: 30, height: 30, borderRadius: 6, border: 'none', background: '#f8fafc', cursor: 'pointer', fontSize: 16, fontWeight: 800, color: '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center' };
+
 const btnSmall = { padding: '4px 10px', borderRadius: 6, border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer', fontWeight: 600, fontFamily: 'inherit' };
 
-// ─── Table groupée par catégorie ───────────────────────────────────────────
-function TableGroupee({ plan, filter, onSelect, selected }) {
-  // On parcourt récursivement la hiérarchie et on produit des "groupes" avec leur chemin.
-  function passesFilter(n) {
+// ─── Table arborescente (catégories, sous-catégories, tâches en arbre) ─────
+function TableGroupee({ plan, filter, onSelect, selected, onAddChild }) {
+  function passes(n) {
     if (filter.statut !== 'all' && n.statut !== filter.statut) return false;
     if (filter.priorite !== 'all' && n.priorite !== filter.priorite) return false;
     return true;
   }
 
-  // Collecte les actions visibles puis on les agrège par chemin de catégories.
+  // On construit la liste plate des lignes en respectant la hiérarchie.
+  // Chaque entrée porte sa profondeur pour l'indentation.
   const rows = [];
-  function walk(parentId, chain) {
+  function walk(parentId, depth, ancestorIds) {
     const enfants = childrenOf(plan, parentId);
     for (const c of enfants) {
-      const nextChain = [...chain, c];
+      const nextAncestors = [...ancestorIds, c.id];
       if (isCategory(c)) {
-        walk(c.id, nextChain);
+        // On collecte d'abord les descendants pour savoir si la catégorie a
+        // au moins un descendant qui passe les filtres (sinon on la masque).
+        const before = rows.length;
+        walk(c.id, depth + 1, nextAncestors);
+        const after = rows.length;
+        if (after > before) {
+          // Insère le header au-dessus des lignes ajoutées
+          const enfantsDirects = childrenOf(plan, c.id);
+          const nbTotal = countLeafs(c.id);
+          const avgAdv = avancementCategorie(plan, c.id);
+          rows.splice(before, 0, { type: 'cat', node: c, depth, nbDirect: enfantsDirects.length, nbTotal, avgAdv });
+        }
       } else {
-        if (filter.axe !== 'all' && !nextChain.some(n => n.id === filter.axe)) continue;
-        if (!passesFilter(c)) continue;
-        rows.push({ node: c, chain: nextChain.slice(0, -1) });
+        if (filter.axe !== 'all' && !nextAncestors.includes(filter.axe) && c.parent !== filter.axe && !ancestorIds.includes(filter.axe)) continue;
+        if (!passes(c)) continue;
+        rows.push({ type: 'action', node: c, depth });
       }
     }
   }
-  walk('racine', []);
-
-  // Groupage par chemin (clé = ids du chemin)
-  const groupes = new Map();
-  for (const r of rows) {
-    const key = r.chain.map(n => n.id).join('>');
-    if (!groupes.has(key)) groupes.set(key, { chain: r.chain, items: [] });
-    groupes.get(key).items.push(r.node);
+  function countLeafs(id) {
+    let n = 0;
+    for (const c of childrenOf(plan, id)) {
+      if (isCategory(c)) n += countLeafs(c.id);
+      else n++;
+    }
+    return n;
   }
+  walk('racine', 0, []);
 
   if (rows.length === 0) {
     return <div style={{ background: '#fff', border: '1px solid #e8ecf0', borderRadius: 12, padding: 40, textAlign: 'center', color: '#94a3b8' }}>Aucune action ne correspond aux filtres.</div>;
   }
 
+  const INDENT = 22;
   return (
     <div style={{ background: '#fff', border: '1px solid #e8ecf0', borderRadius: 12, overflow: 'hidden' }}>
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e8ecf0' }}>
-              {['Action', 'Objectif', 'Responsable', 'Échéance', 'Statut', 'Priorité', 'Société', 'Avancement', ''].map((h, i) => (
-                <th key={i} style={{ padding: '10px 12px', textAlign: i === 7 ? 'left' : 'left', fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, whiteSpace: 'nowrap' }}>{h}</th>
+              {['Action / catégorie', 'Objectif', 'Responsable', 'Échéance', 'Statut', 'Priorité', 'Société', 'Avancement', ''].map((h, i) => (
+                <th key={i} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {[...groupes.values()].map((g, gi) => {
-              const groupLabel = g.chain.map(n => `${n.icone || ''} ${n.label}`).join(' › ') || '— Racine';
-              const groupColor = g.chain[0]?.couleur || '#cbd5e1';
-              const avgAdv = g.items.reduce((s, n) => s + (n.avancement || 0), 0) / g.items.length;
-              return (
-                <React.Fragment key={gi}>
-                  <tr style={{ background: `${groupColor}15` }}>
-                    <td colSpan={9} style={{ padding: '8px 12px', borderLeft: `4px solid ${groupColor}`, fontSize: 12, fontWeight: 700, color: '#1e293b' }}>
-                      <span style={{ color: groupColor }}>📂 {groupLabel}</span>
-                      <span style={{ color: '#94a3b8', fontWeight: 500, marginLeft: 10 }}>· {g.items.length} action{g.items.length > 1 ? 's' : ''} · avancement moyen {Math.round(avgAdv)}%</span>
+            {rows.map((r, i) => {
+              const n = r.node;
+              const indent = r.depth * INDENT;
+              if (r.type === 'cat') {
+                return (
+                  <tr key={`cat-${n.id}-${i}`} style={{ background: `${n.couleur}10`, borderTop: r.depth === 0 ? '2px solid #e8ecf0' : '1px solid #f1f5f9' }}>
+                    <td colSpan={9} style={{ padding: '8px 12px', paddingLeft: 12 + indent, borderLeft: r.depth === 0 ? `4px solid ${n.couleur}` : 'none' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ fontSize: r.depth === 0 ? 14 : 13, fontWeight: 800, color: n.couleur }}>
+                          {r.depth === 0 ? '📂' : r.depth === 1 ? '📁' : '↳'} {n.icone} {n.label}
+                        </span>
+                        <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 500 }}>
+                          · {r.nbTotal} action{r.nbTotal > 1 ? 's' : ''}
+                          {r.avgAdv != null && ` · avancement moy. ${Math.round(r.avgAdv)}%`}
+                        </span>
+                        <button onClick={(e) => { e.stopPropagation(); onAddChild(n.id); }}
+                          style={{ marginLeft: 'auto', padding: '3px 10px', fontSize: 11, fontWeight: 700, background: n.couleur, color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
+                          + Ajouter une action
+                        </button>
+                        <button onClick={(e) => { e.stopPropagation(); onSelect(n); }}
+                          style={{ padding: '3px 8px', fontSize: 11, background: 'transparent', color: n.couleur, border: `1px solid ${n.couleur}`, borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
+                          ✎
+                        </button>
+                      </div>
                     </td>
                   </tr>
-                  {g.items.map((n, i) => {
-                    const soc = SOCIETES[n.societe] || SOCIETES.groupe;
-                    return (
-                      <tr key={n.id} onClick={() => onSelect(n)}
-                        style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer', background: selected === n.id ? '#fef3c7' : 'transparent' }}
-                        onMouseEnter={e => { if (selected !== n.id) e.currentTarget.style.background = '#f8fafc'; }}
-                        onMouseLeave={e => { if (selected !== n.id) e.currentTarget.style.background = 'transparent'; }}>
-                        <td style={{ padding: '10px 12px', borderLeft: `3px solid ${n.couleur || '#cbd5e1'}`, paddingLeft: 22 }}>
-                          <div style={{ fontWeight: 600, color: '#1e293b' }}>{n.icone} {n.label}</div>
-                          {n.impact && <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>→ {n.impact}</div>}
-                        </td>
-                        <td style={{ padding: '10px 12px', color: '#475569', fontSize: 12, maxWidth: 240 }}>{n.objectif || '—'}</td>
-                        <td style={{ padding: '10px 12px', color: '#475569', fontSize: 12 }}>{n.responsable || '—'}</td>
-                        <td style={{ padding: '10px 12px', color: '#475569', fontSize: 12, whiteSpace: 'nowrap' }}>{n.echeance ? new Date(n.echeance).toLocaleDateString('fr-FR') : '—'}</td>
-                        <td style={{ padding: '10px 12px' }}><StatutBadge statut={n.statut} /></td>
-                        <td style={{ padding: '10px 12px' }}><PrioriteBadge priorite={n.priorite} /></td>
-                        <td style={{ padding: '10px 12px', fontSize: 12 }}>{soc.flag} {soc.label}</td>
-                        <td style={{ padding: '10px 12px', minWidth: 110 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <div style={{ flex: 1, height: 5, background: '#f1f5f9', borderRadius: 99, overflow: 'hidden' }}>
-                              <div style={{ width: `${n.avancement || 0}%`, height: '100%', background: n.couleur || '#3b82f6', borderRadius: 99 }} />
-                            </div>
-                            <span style={{ fontSize: 11, fontWeight: 700, color: '#475569', minWidth: 32 }}>{n.avancement || 0}%</span>
-                          </div>
-                        </td>
-                        <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: 16 }}>✏️</td>
-                      </tr>
-                    );
-                  })}
-                </React.Fragment>
+                );
+              }
+              const soc = SOCIETES[n.societe] || SOCIETES.groupe;
+              return (
+                <tr key={n.id} onClick={() => onSelect(n)}
+                  style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer', background: selected === n.id ? '#fef3c7' : 'transparent' }}
+                  onMouseEnter={e => { if (selected !== n.id) e.currentTarget.style.background = '#f8fafc'; }}
+                  onMouseLeave={e => { if (selected !== n.id) e.currentTarget.style.background = 'transparent'; }}>
+                  <td style={{ padding: '8px 12px', paddingLeft: 12 + indent, borderLeft: `3px solid ${n.couleur || '#cbd5e1'}` }}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                      <span style={{ color: '#cbd5e1', fontSize: 10 }}>•</span>
+                      <span style={{ fontWeight: 600, color: '#1e293b' }}>{n.icone} {n.label}</span>
+                    </div>
+                    {n.impact && <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2, marginLeft: 16 }}>→ {n.impact}</div>}
+                  </td>
+                  <td style={{ padding: '8px 12px', color: '#475569', fontSize: 12, maxWidth: 240 }}>{n.objectif || '—'}</td>
+                  <td style={{ padding: '8px 12px', color: '#475569', fontSize: 12 }}>{n.responsable || '—'}</td>
+                  <td style={{ padding: '8px 12px', color: '#475569', fontSize: 12, whiteSpace: 'nowrap' }}>{n.echeance ? new Date(n.echeance).toLocaleDateString('fr-FR') : '—'}</td>
+                  <td style={{ padding: '8px 12px' }}><StatutBadge statut={n.statut} /></td>
+                  <td style={{ padding: '8px 12px' }}><PrioriteBadge priorite={n.priorite} /></td>
+                  <td style={{ padding: '8px 12px', fontSize: 12 }}>{soc.flag} {soc.label}</td>
+                  <td style={{ padding: '8px 12px', minWidth: 110 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div style={{ flex: 1, height: 5, background: '#f1f5f9', borderRadius: 99, overflow: 'hidden' }}>
+                        <div style={{ width: `${n.avancement || 0}%`, height: '100%', background: n.couleur || '#3b82f6', borderRadius: 99 }} />
+                      </div>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: '#475569', minWidth: 32 }}>{n.avancement || 0}%</span>
+                    </div>
+                  </td>
+                  <td style={{ padding: '8px 12px', textAlign: 'center', fontSize: 14 }}>✏️</td>
+                </tr>
               );
             })}
           </tbody>
@@ -501,8 +650,13 @@ export default function PlanProgression() {
 
   function onSelectFromMindmap(id) {
     setSelected(id);
+  }
+  function onEditFromMindmap(id) {
     const node = id === 'racine' ? plan.racine : plan.noeuds.find(n => n.id === id);
     if (node) setEditNode(node);
+  }
+  function onAddChildFromMindmap(parentId) {
+    setEditNode({ id: '', parent: parentId, type: 'action', couleur: '#3b82f6' });
   }
   function onSelectFromTable(node) { setSelected(node.id); setEditNode(node); }
 
@@ -565,19 +719,19 @@ export default function PlanProgression() {
 
               {/* Vue : mindmap seule */}
               {view === 'mindmap' && (
-                <Mindmap plan={plan} onSelect={onSelectFromMindmap} selectedId={selected} expandedIds={expandedIds} toggleExpanded={toggleExpanded} />
+                <Mindmap plan={plan} onSelect={onSelectFromMindmap} selectedId={selected} expandedIds={expandedIds} toggleExpanded={toggleExpanded} onAddChild={onAddChildFromMindmap} onEdit={onEditFromMindmap} />
               )}
 
               {/* Vue : table seule */}
               {view === 'table' && (
-                <TableGroupee plan={plan} filter={filter} onSelect={onSelectFromTable} selected={selected} />
+                <TableGroupee plan={plan} filter={filter} onSelect={onSelectFromTable} selected={selected} onAddChild={onAddChildFromMindmap} />
               )}
 
               {/* Vue : côte à côte */}
               {view === 'split' && (
                 <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 14 }}>
-                  <Mindmap plan={plan} onSelect={onSelectFromMindmap} selectedId={selected} expandedIds={expandedIds} toggleExpanded={toggleExpanded} />
-                  <TableGroupee plan={plan} filter={filter} onSelect={onSelectFromTable} selected={selected} />
+                  <Mindmap plan={plan} onSelect={onSelectFromMindmap} selectedId={selected} expandedIds={expandedIds} toggleExpanded={toggleExpanded} onAddChild={onAddChildFromMindmap} onEdit={onEditFromMindmap} />
+                  <TableGroupee plan={plan} filter={filter} onSelect={onSelectFromTable} selected={selected} onAddChild={onAddChildFromMindmap} />
                 </div>
               )}
 
