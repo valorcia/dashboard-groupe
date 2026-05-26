@@ -265,6 +265,7 @@ function Mindmap({ plan, onSelect, selectedId, expandedIds, toggleExpanded, onAd
         </div>
       </div>
       <div
+        data-mindmap-area
         ref={svgRef}
         onMouseDown={onMouseDown}
         onMouseMove={onMouseMove}
@@ -854,7 +855,7 @@ export default function PlanProgression() {
 
               {/* Vue : côte à côte */}
               {view === 'split' && (
-                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 14 }}>
+                <div data-plan-split style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 14 }}>
                   <Mindmap plan={plan} onSelect={onSelectFromMindmap} selectedId={selected} expandedIds={expandedIds} toggleExpanded={toggleExpanded} onAddChild={onAddChildFromMindmap} onEdit={onEditFromMindmap} onMoveNode={onMoveNode} />
                   <TableGroupee plan={plan} filter={filter} onSelect={onSelectFromTable} selected={selected} onAddChild={onAddChildFromMindmap} />
                 </div>

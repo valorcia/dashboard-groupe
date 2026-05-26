@@ -296,7 +296,7 @@ function FunnelEtape({ etape, index, total }) {
   };
   return (
     <a href={links[etape.id] || '/'} style={{ textDecoration: 'none', display: 'block' }}>
-      <div style={{
+      <div className="funnel-etape" style={{
         background: `linear-gradient(135deg, ${etape.couleur} 0%, ${etape.couleur}dd 100%)`,
         color: '#fff',
         borderRadius: 12,
@@ -595,40 +595,130 @@ function FraisFixesModule() {
           </div>
         </>
       ) : (
-        // Vue groupe consolidé : table croisée société × mois
-        <div style={{ padding: 16 }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
-            <thead>
-              <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e8ecf0' }}>
-                <th style={{ padding: '10px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Société</th>
-                {MOIS_NOMS.map(m => <th key={m} style={{ padding: '10px 6px', textAlign: 'right', fontSize: 10, fontWeight: 700, color: '#64748b' }}>{m}</th>)}
-                <th style={{ padding: '10px 12px', textAlign: 'right', fontSize: 10, fontWeight: 700, color: '#1e293b', background: '#fffbeb' }}>Total an</th>
-              </tr>
-            </thead>
-            <tbody>
-              {societes.map(s => {
-                const tots = MOIS_NOMS.map((_, i) => s.charges.reduce((sum, c) => sum + (c.mois[i] || 0), 0));
-                const an = tots.reduce((sum, v) => sum + v, 0);
-                return (
-                  <tr key={s.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td style={{ padding: '10px 12px', borderLeft: `4px solid ${s.couleur}`, fontWeight: 700 }}>{s.flag} {s.nom}</td>
-                    {tots.map((v, i) => <td key={i} style={{ padding: '10px 6px', textAlign: 'right', color: '#1e293b' }}>{fmtK(v)}</td>)}
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, background: '#fffbeb' }}>{fmtEur(an)}</td>
-                  </tr>
-                );
-              })}
-              <tr style={{ background: '#1e293b', color: '#fff' }}>
-                <td style={{ padding: '12px', fontWeight: 800 }}>🌐 TOTAL GROUPE</td>
-                {MOIS_NOMS.map((_, i) => {
-                  const tot = societes.reduce((s, so) => s + so.charges.reduce((ss, c) => ss + (c.mois[i] || 0), 0), 0);
-                  return <td key={i} style={{ padding: '12px 6px', textAlign: 'right', fontWeight: 700 }}>{fmtK(tot)}</td>;
-                })}
-                <td style={{ padding: '12px', textAlign: 'right', fontWeight: 800, color: '#fcd34d', background: '#0f172a' }}>{fmtEur(societes.reduce((s, so) => s + so.charges.reduce((ss, c) => ss + c.mois.reduce((sss, v) => sss + v, 0), 0), 0))}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        // Vue groupe consolidé : catégories agrégées + détail par société
+        <FraisGroupeConsolide societes={societes} />
       )}
+    </div>
+  );
+}
+
+// Vue groupe consolidée : agrège les charges des 3 sociétés par catégorie,
+// puis détail par société en complément.
+function FraisGroupeConsolide({ societes }) {
+  // Agrégation : pour chaque catégorie, somme des mois sur les 3 sociétés
+  const parCat = {};
+  for (const s of societes) {
+    for (const c of s.charges) {
+      if (!parCat[c.categorie]) parCat[c.categorie] = { categorie: c.categorie, mois: Array(12).fill(0), parSoc: {} };
+      for (let i = 0; i < 12; i++) {
+        const v = c.mois[i] || 0;
+        parCat[c.categorie].mois[i] += v;
+        if (!parCat[c.categorie].parSoc[s.id]) parCat[c.categorie].parSoc[s.id] = { nom: s.nom, flag: s.flag, couleur: s.couleur, mois: Array(12).fill(0) };
+        parCat[c.categorie].parSoc[s.id].mois[i] += v;
+      }
+    }
+  }
+  const cats = Object.values(parCat).sort((a, b) => b.mois.reduce((s, v) => s + v, 0) - a.mois.reduce((s, v) => s + v, 0));
+  const totalsParMois = MOIS_NOMS.map((_, i) => cats.reduce((s, c) => s + c.mois[i], 0));
+  const totalAnnuel = totalsParMois.reduce((s, v) => s + v, 0);
+
+  const [expanded, setExpanded] = useState({});
+
+  return (
+    <div>
+      {/* Bandeau récap */}
+      <div style={{ padding: '14px 18px', background: 'linear-gradient(135deg, #6b21a8 0%, #4c1d95 100%)', color: '#fff' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 800 }}>🌐 Groupe consolidé — somme des 3 sociétés</div>
+            <div style={{ fontSize: 11, color: '#c4b5fd', marginTop: 2 }}>{cats.length} catégories · {societes.reduce((s, so) => s + so.charges.length, 0)} charges au total · {societes.map(s => `${s.flag} ${s.nom}`).join(' · ')}</div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: 11, color: '#ddd6fe', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>Total annuel groupe</div>
+            <div style={{ fontSize: 26, fontWeight: 800, color: '#fcd34d', lineHeight: 1 }}>{fmtEur(totalAnnuel)}</div>
+            <div style={{ fontSize: 11, color: '#c4b5fd', marginTop: 2 }}>≈ {fmtEur(totalAnnuel / 12)} / mois</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Table consolidée par catégorie */}
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
+          <thead>
+            <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e8ecf0' }}>
+              <th style={{ padding: '10px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, minWidth: 180 }}>Catégorie</th>
+              {MOIS_NOMS.map(m => <th key={m} style={{ padding: '10px 6px', textAlign: 'right', fontSize: 10, fontWeight: 700, color: '#64748b', minWidth: 60 }}>{m}</th>)}
+              <th style={{ padding: '10px 12px', textAlign: 'right', fontSize: 10, fontWeight: 700, color: '#1e293b', background: '#fffbeb', minWidth: 100 }}>Total an</th>
+              <th style={{ width: 32 }}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {cats.map(cat => {
+              const annuel = cat.mois.reduce((s, v) => s + v, 0);
+              const couleur = CAT_COLORS[cat.categorie] || '#94a3b8';
+              const isExp = expanded[cat.categorie];
+              return (
+                <React.Fragment key={cat.categorie}>
+                  <tr style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }}
+                      onClick={() => setExpanded({ ...expanded, [cat.categorie]: !isExp })}>
+                    <td style={{ padding: '10px 12px', borderLeft: `4px solid ${couleur}`, fontWeight: 700, color: '#1e293b' }}>
+                      <span style={{ display: 'inline-block', width: 16, fontSize: 11, color: couleur }}>{isExp ? '▾' : '▸'}</span>
+                      {cat.categorie}
+                      <span style={{ marginLeft: 8, fontSize: 10, color: '#94a3b8', fontWeight: 500 }}>{Object.keys(cat.parSoc).length} société{Object.keys(cat.parSoc).length > 1 ? 's' : ''}</span>
+                    </td>
+                    {cat.mois.map((v, i) => <td key={i} style={{ padding: '10px 6px', textAlign: 'right', color: v > 0 ? '#1e293b' : '#cbd5e1' }}>{v > 0 ? fmtK(v) : '—'}</td>)}
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, color: couleur, background: '#fffbeb' }}>{fmtEur(annuel)}</td>
+                    <td style={{ padding: '10px', textAlign: 'center', color: couleur }}>{isExp ? '−' : '+'}</td>
+                  </tr>
+                  {isExp && Object.values(cat.parSoc).map(soc => {
+                    const socAn = soc.mois.reduce((s, v) => s + v, 0);
+                    return (
+                      <tr key={cat.categorie + '-' + soc.nom} style={{ background: `${soc.couleur}08`, borderBottom: '1px solid #f1f5f9' }}>
+                        <td style={{ padding: '6px 12px', paddingLeft: 36, fontSize: 11, color: soc.couleur, fontWeight: 600 }}>↳ {soc.flag} {soc.nom}</td>
+                        {soc.mois.map((v, i) => <td key={i} style={{ padding: '6px 6px', textAlign: 'right', fontSize: 11, color: v > 0 ? '#475569' : '#cbd5e1' }}>{v > 0 ? fmtK(v) : '—'}</td>)}
+                        <td style={{ padding: '6px 12px', textAlign: 'right', fontSize: 11, fontWeight: 600, color: soc.couleur }}>{fmtEur(socAn)}</td>
+                        <td></td>
+                      </tr>
+                    );
+                  })}
+                </React.Fragment>
+              );
+            })}
+            <tr style={{ background: '#1e293b', color: '#fff' }}>
+              <td style={{ padding: '12px', fontWeight: 800 }}>🌐 TOTAL GROUPE</td>
+              {totalsParMois.map((v, i) => <td key={i} style={{ padding: '12px 6px', textAlign: 'right', fontWeight: 700 }}>{fmtK(v)}</td>)}
+              <td style={{ padding: '12px', textAlign: 'right', fontWeight: 800, color: '#fcd34d', background: '#0f172a' }}>{fmtEur(totalAnnuel)}</td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {/* Récap par société en bas */}
+      <div style={{ padding: 16, borderTop: '1px solid #e8ecf0', background: '#f8fafc' }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>Répartition par société (charges totales annuelles)</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
+          {societes.map(s => {
+            const an = s.charges.reduce((sum, c) => sum + c.mois.reduce((ss, v) => ss + v, 0), 0);
+            const part = totalAnnuel > 0 ? (an / totalAnnuel) * 100 : 0;
+            return (
+              <div key={s.id} style={{ background: '#fff', border: '1px solid #e8ecf0', borderLeft: `4px solid ${s.couleur}`, borderRadius: 8, padding: '10px 14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 18 }}>{s.flag}</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: '#1e293b' }}>{s.nom}</div>
+                    <div style={{ fontSize: 11, color: '#94a3b8' }}>{s.charges.length} charges · {part.toFixed(0)}% du groupe</div>
+                  </div>
+                </div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: s.couleur, marginTop: 6 }}>{fmtEur(an)}</div>
+                <div style={{ height: 4, background: '#f1f5f9', borderRadius: 99, marginTop: 4, overflow: 'hidden' }}>
+                  <div style={{ width: `${part}%`, height: '100%', background: s.couleur }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
