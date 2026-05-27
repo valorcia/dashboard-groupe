@@ -262,7 +262,18 @@ async function testPlanneo() {
   try {
     parsed = new URL(url);
   } catch (e) {
-    steps.push({ step: 'URL Planneo', ok: false, error: `URL invalide après normalisation : "${url}" — ${e.message}. Format attendu : https://app.valorcia.com/pv9` });
+    steps.push({ step: 'URL Planneo', ok: false, error: `URL invalide : "${urlRaw}" — ${e.message}. Format attendu : https://app.valorcia.com/pv9. À corriger dans /connectors → Planneo → URL Planneo.` });
+    return steps;
+  }
+  // Vérifie que le hostname ressemble à un vrai nom de domaine (a un point ou est localhost).
+  const host = parsed.hostname;
+  if (host !== 'localhost' && !host.includes('.')) {
+    steps.push({
+      step: 'URL Planneo',
+      ok: false,
+      error: `URL malformée : "${urlRaw}" — après nettoyage, le nom de domaine extrait est "${host}", ce qui n'est pas un domaine valide. Format attendu : https://app.valorcia.com/pv9. À corriger dans /connectors → Planneo → URL Planneo.`,
+      detail: { saisie: urlRaw, normalisée: parsed.toString(), hostname: host },
+    });
     return steps;
   }
   if (url !== urlRaw) {
