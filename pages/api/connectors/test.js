@@ -252,11 +252,18 @@ async function testPlanneo() {
   steps.push({ step: 'Variables présentes', ok: !!(urlRaw && key), detail: { url: urlRaw, apiKey: key ? `(${key.length} chars)` : 'manquant' } });
   if (!urlRaw || !key) return steps;
 
-  // Normalisation URL : tolère "https//" / "https:/foo" / trailing slash / espaces.
+  // Normalisation URL robuste : extrait le scheme, retire tous les séparateurs
+  // résiduels (:, /), reconstruit proprement. Tolère :
+  //   https://foo, https//foo, https:/foo, https:foo, httpsfoo, foo
   let url = String(urlRaw).trim();
-  url = url.replace(/^(https?)(?!:)/i, '$1:');     // "https//" → "https://"
-  url = url.replace(/^(https?):(?!\/\/)/i, '$1://'); // "https:/" → "https://"
-  if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+  const schemeMatch = url.match(/^(https?)/i);
+  let scheme = 'https';
+  if (schemeMatch) {
+    scheme = schemeMatch[1].toLowerCase();
+    url = url.slice(schemeMatch[1].length);
+  }
+  url = url.replace(/^[:/]+/, '');
+  url = `${scheme}://${url}`;
 
   let parsed;
   try {
