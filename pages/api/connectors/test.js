@@ -247,14 +247,33 @@ async function testGmb()      { return testStubFields('My Business',    ['GMB_CL
 
 async function testPlanneo() {
   const steps = [];
-  const url = await getConfigValue('PLANNEO_URL');
+  const urlRaw = await getConfigValue('PLANNEO_URL');
   const key = await getConfigValue('PLANNEO_API_KEY');
-  steps.push({ step: 'Variables présentes', ok: !!(url && key), detail: { url, apiKey: key ? `(${key.length} chars)` : 'manquant' } });
-  if (!url || !key) return steps;
+  steps.push({ step: 'Variables présentes', ok: !!(urlRaw && key), detail: { url: urlRaw, apiKey: key ? `(${key.length} chars)` : 'manquant' } });
+  if (!urlRaw || !key) return steps;
+
+  // Normalisation URL : tolère "https//" / "https:/foo" / trailing slash / espaces.
+  let url = String(urlRaw).trim();
+  url = url.replace(/^(https?)(?!:)/i, '$1:');     // "https//" → "https://"
+  url = url.replace(/^(https?):(?!\/\/)/i, '$1://'); // "https:/" → "https://"
+  if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+
+  let parsed;
   try {
-    const r = await fetch(`${url.replace(/\/$/, '')}/api/health`, { headers: { Authorization: `Bearer ${key}` } });
+    parsed = new URL(url);
+  } catch (e) {
+    steps.push({ step: 'URL Planneo', ok: false, error: `URL invalide après normalisation : "${url}" — ${e.message}. Format attendu : https://app.valorcia.com/pv9` });
+    return steps;
+  }
+  if (url !== urlRaw) {
+    steps.push({ step: 'URL Planneo', ok: true, detail: { saisie: urlRaw, normalisée: parsed.toString().replace(/\/$/, '') } });
+  }
+
+  const base = parsed.toString().replace(/\/$/, '');
+  try {
+    const r = await fetch(`${base}/api/health`, { headers: { Authorization: `Bearer ${key}` } });
     if (r.ok) steps.push({ step: 'Ping /api/health', ok: true, detail: { status: r.status } });
-    else steps.push({ step: 'Ping /api/health', ok: false, error: `HTTP ${r.status}` });
+    else steps.push({ step: 'Ping /api/health', ok: false, error: `HTTP ${r.status} sur ${base}/api/health` });
   } catch (e) {
     steps.push({ step: 'Ping /api/health', ok: false, error: e.message });
   }
