@@ -270,12 +270,54 @@ async function testPlanneo() {
   }
 
   const base = parsed.toString().replace(/\/$/, '');
+
+  // 1. Ping de l'URL de base — doit répondre (l'app est en ligne).
   try {
-    const r = await fetch(`${base}/api/health`, { headers: { Authorization: `Bearer ${key}` } });
-    if (r.ok) steps.push({ step: 'Ping /api/health', ok: true, detail: { status: r.status } });
-    else steps.push({ step: 'Ping /api/health', ok: false, error: `HTTP ${r.status} sur ${base}/api/health` });
+    const r = await fetch(base, { method: 'GET', redirect: 'follow' });
+    if (r.ok || (r.status >= 300 && r.status < 400)) {
+      steps.push({ step: 'URL Planneo accessible', ok: true, detail: { status: r.status, contentType: r.headers.get('content-type')?.slice(0, 60) } });
+    } else {
+      const body = await r.text().catch(() => '');
+      steps.push({ step: 'URL Planneo accessible', ok: false, error: `HTTP ${r.status} sur ${base} — ${body.slice(0, 200)}` });
+      return steps;
+    }
   } catch (e) {
-    steps.push({ step: 'Ping /api/health', ok: false, error: e.message });
+    steps.push({ step: 'URL Planneo accessible', ok: false, error: `Réseau : ${e.message}` });
+    return steps;
+  }
+
+  // 2. Sonde plusieurs endpoints API plausibles avec plusieurs schémas d'auth.
+  // L'API publique de Planneo n'est pas documentée ici, donc on tente les
+  // patterns courants et on rapporte le premier qui répond proprement.
+  const endpoints = ['/api/health', '/api/ping', '/api/status', '/health', '/api/v1/health'];
+  const authVariants = [
+    { name: 'Bearer', headers: { Authorization: `Bearer ${key}` } },
+    { name: 'X-API-Key', headers: { 'X-API-Key': key } },
+    { name: 'API-Key', headers: { 'Api-Key': key } },
+  ];
+  let firstOk = null;
+  const tried = [];
+  for (const path of endpoints) {
+    for (const av of authVariants) {
+      try {
+        const r = await fetch(`${base}${path}`, { headers: av.headers });
+        tried.push({ path, auth: av.name, status: r.status });
+        if (r.ok) { firstOk = { path, auth: av.name, status: r.status }; break; }
+      } catch (e) {
+        tried.push({ path, auth: av.name, error: e.message.slice(0, 60) });
+      }
+    }
+    if (firstOk) break;
+  }
+  if (firstOk) {
+    steps.push({ step: `Endpoint API trouvé : ${firstOk.path}`, ok: true, detail: firstOk });
+  } else {
+    steps.push({
+      step: 'Endpoint API',
+      ok: false,
+      error: `Aucun endpoint testé n'a répondu 2xx. L'URL Planneo répond, mais l'API n'est pas exposée aux chemins habituels ou la clé n'a pas le bon format. Tentatives :`,
+      detail: { tried: tried.slice(0, 15) },
+    });
   }
   return steps;
 }
