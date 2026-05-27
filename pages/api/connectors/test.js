@@ -271,18 +271,31 @@ async function testPlanneo() {
 
   const base = parsed.toString().replace(/\/$/, '');
 
+  // Helper qui extrait la vraie raison d'un échec fetch (undici/Node).
+  const reasonOf = (e) => {
+    const cause = e?.cause;
+    const code = cause?.code || cause?.errno;
+    const sub = cause?.message || cause?.toString?.();
+    if (code === 'ENOTFOUND') return `DNS introuvable : "${parsed.hostname}" n'existe pas. Vérifier l'URL.`;
+    if (code === 'ECONNREFUSED') return `Connexion refusée par ${parsed.hostname} (port fermé ?).`;
+    if (code === 'ETIMEDOUT' || code === 'UND_ERR_CONNECT_TIMEOUT') return `Timeout sur ${parsed.hostname} — le serveur ne répond pas dans le délai.`;
+    if (code === 'CERT_HAS_EXPIRED' || code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' || sub?.includes('certificate')) return `Erreur SSL/TLS sur ${parsed.hostname} : ${sub || code}`;
+    if (code === 'UND_ERR_SOCKET' || sub?.includes('socket')) return `Connexion socket interrompue par ${parsed.hostname} — typiquement un pare-feu / WAF qui bloque les requêtes serveur→serveur.`;
+    return `${e.message || 'fetch failed'}${code ? ` (code ${code})` : ''}${sub ? ` — ${sub}` : ''}`;
+  };
+
   // 1. Ping de l'URL de base — doit répondre (l'app est en ligne).
   try {
     const r = await fetch(base, { method: 'GET', redirect: 'follow' });
     if (r.ok || (r.status >= 300 && r.status < 400)) {
-      steps.push({ step: 'URL Planneo accessible', ok: true, detail: { status: r.status, contentType: r.headers.get('content-type')?.slice(0, 60) } });
+      steps.push({ step: 'URL Planneo accessible', ok: true, detail: { url: base, status: r.status, contentType: r.headers.get('content-type')?.slice(0, 60) } });
     } else {
       const body = await r.text().catch(() => '');
       steps.push({ step: 'URL Planneo accessible', ok: false, error: `HTTP ${r.status} sur ${base} — ${body.slice(0, 200)}` });
       return steps;
     }
   } catch (e) {
-    steps.push({ step: 'URL Planneo accessible', ok: false, error: `Réseau : ${e.message}` });
+    steps.push({ step: 'URL Planneo accessible', ok: false, error: reasonOf(e), detail: { url: base } });
     return steps;
   }
 
