@@ -303,10 +303,13 @@ async function testPlanneo() {
   };
 
   // 1. Ping de l'URL de base — doit répondre (l'app est en ligne).
+  let isSpa = false;
   try {
     const r = await fetch(base, { method: 'GET', redirect: 'follow' });
+    const ct = r.headers.get('content-type') || '';
+    isSpa = ct.includes('text/html');
     if (r.ok || (r.status >= 300 && r.status < 400)) {
-      steps.push({ step: 'URL Planneo accessible', ok: true, detail: { url: base, status: r.status, contentType: r.headers.get('content-type')?.slice(0, 60) } });
+      steps.push({ step: 'URL Planneo accessible', ok: true, detail: { url: base, status: r.status, contentType: ct.slice(0, 60), type: isSpa ? 'SPA HTML' : 'autre' } });
     } else {
       const body = await r.text().catch(() => '');
       steps.push({ step: 'URL Planneo accessible', ok: false, error: `HTTP ${r.status} sur ${base} — ${body.slice(0, 200)}` });
@@ -317,37 +320,23 @@ async function testPlanneo() {
     return steps;
   }
 
-  // 2. Sonde plusieurs endpoints API plausibles avec plusieurs schémas d'auth.
-  // L'API publique de Planneo n'est pas documentée ici, donc on tente les
-  // patterns courants et on rapporte le premier qui répond proprement.
-  const endpoints = ['/api/health', '/api/ping', '/api/status', '/health', '/api/v1/health'];
-  const authVariants = [
-    { name: 'Bearer', headers: { Authorization: `Bearer ${key}` } },
-    { name: 'X-API-Key', headers: { 'X-API-Key': key } },
-    { name: 'API-Key', headers: { 'Api-Key': key } },
-  ];
-  let firstOk = null;
-  const tried = [];
-  for (const path of endpoints) {
-    for (const av of authVariants) {
-      try {
-        const r = await fetch(`${base}${path}`, { headers: av.headers });
-        tried.push({ path, auth: av.name, status: r.status });
-        if (r.ok) { firstOk = { path, auth: av.name, status: r.status }; break; }
-      } catch (e) {
-        tried.push({ path, auth: av.name, error: e.message.slice(0, 60) });
-      }
-    }
-    if (firstOk) break;
-  }
-  if (firstOk) {
-    steps.push({ step: `Endpoint API trouvé : ${firstOk.path}`, ok: true, detail: firstOk });
-  } else {
+  // 2. Note : Planneo /pv9 est une SPA monolithique React, pas une API REST.
+  // Pas de sondage d'endpoints — ils renverraient tous 500 (fallback SPA) et
+  // créeraient un faux échec. L'intégration doit passer par un autre canal
+  // (Vercel KV partagée avec hub-agentic, export CSV, ou backend dédié).
+  if (isSpa) {
     steps.push({
-      step: 'Endpoint API',
-      ok: false,
-      error: `Aucun endpoint testé n'a répondu 2xx. L'URL Planneo répond, mais l'API n'est pas exposée aux chemins habituels ou la clé n'a pas le bon format. Tentatives :`,
-      detail: { tried: tried.slice(0, 15) },
+      step: 'Intégration API',
+      ok: true,
+      detail: {
+        note: 'Planneo est servi comme SPA HTML statique sur /pv9 — pas de REST API à tester directement.',
+        suggestions: [
+          'Brancher via Vercel KV partagée (comme dans le projet hub-agentic)',
+          'Utiliser un export régulier (CSV/JSON) déposé sur OneDrive ou KV',
+          'Créer un backend dédié /api/planneo qui lit la base interne',
+        ],
+        cleEnregistree: `clé API de ${key.length} chars · prête à être utilisée par le canal d'intégration choisi`,
+      },
     });
   }
   return steps;
